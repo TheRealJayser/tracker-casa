@@ -34,10 +34,7 @@ firebase login
 # 3) entra nella cartella dell'app (trascina la cartella nel Terminale dopo "cd ")
 cd ~/Downloads/tracker-casa
 
-# 4) collega la cartella al tuo progetto: scegli tracker-casa, come alias scrivi: default
-firebase use --add
-
-# 5) pubblica app + regole di sicurezza
+# 4) pubblica app + regole di sicurezza (il progetto tracker-casa-a0c47 è già collegato nel file .firebaserc)
 firebase deploy
 ```
 
