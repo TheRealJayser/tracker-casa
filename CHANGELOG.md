@@ -2,6 +2,10 @@
 
 Tutte le modifiche all'app sono registrate qui. Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioni [SemVer](https://semver.org/lang/it/).
 
+## [1.4.3] — 2026-11-15
+### Corretto
+- Login con Google su iPhone: risolto "Errore 400: redirect_uri_mismatch". Ora il login si apre in una finestra (popup) sul dominio già autorizzato di Firebase, senza bisogno di configurare Google Cloud.
+
 ## [1.4.2] — 2026-11-15
 ### Corretto
 - Anche la grafica (styles.css) si aggiorna subito dopo ogni release, senza aspettare la cache del browser.

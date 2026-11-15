@@ -118,7 +118,9 @@ if (hosted) {
 const configured = !!cfg.apiKey && !cfg.apiKey.includes("INCOLLA");
 let auth, db;
 if (configured) {
-  const app = initializeApp(hosted ? { ...cfg, authDomain: location.host } : cfg);
+  // authDomain resta quello di Firebase (progetto.firebaseapp.com), già autorizzato da Google:
+  // con il login a popup funziona anche su iPhone senza configurazioni extra.
+  const app = initializeApp(cfg);
   auth = getAuth(app);
   db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
 }
@@ -127,7 +129,6 @@ async function login() {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
   try {
-    if (hosted && isIOS) return await signInWithRedirect(auth, provider);
     await signInWithPopup(auth, provider);
   } catch (e) {
     if (["auth/popup-blocked", "auth/operation-not-supported-in-this-environment", "auth/cancelled-popup-request"].includes(e.code)) {
