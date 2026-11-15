@@ -2,6 +2,10 @@
 
 Tutte le modifiche all'app sono registrate qui. Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioni [SemVer](https://semver.org/lang/it/).
 
+## [1.4.1] — 2026-11-15
+### Corretto
+- Le icone si aggiornano subito anche sui telefoni che avevano ancora in memoria quella vecchia.
+
 ## [1.4.0] — 2026-11-15
 ### Aggiunto
 - **Nuova icona dell'app** (casa con spunta, sfondo viola sfumato) per la schermata Home dell'iPhone, Android e il browser; sorgente in `icons/icon.svg`.
