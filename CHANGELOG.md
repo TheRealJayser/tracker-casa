@@ -2,6 +2,10 @@
 
 Tutte le modifiche all'app sono registrate qui. Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioni [SemVer](https://semver.org/lang/it/).
 
+## [1.4.2] — 2026-11-15
+### Corretto
+- Anche la grafica (styles.css) si aggiorna subito dopo ogni release, senza aspettare la cache del browser.
+
 ## [1.4.1] — 2026-11-15
 ### Corretto
 - Le icone si aggiornano subito anche sui telefoni che avevano ancora in memoria quella vecchia.

@@ -13,7 +13,7 @@
     ],
     "headers": [
       {
-        "source": "**/*.@(js|webmanifest|html)",
+        "source": "**/*.@(js|css|webmanifest|html)",
         "headers": [
           {
             "key": "Cache-Control",
