@@ -2,40 +2,57 @@
 
 Web app per tre coinquiline: lista di **cosa manca in casa**, **registro acquisti**, **statistiche** (chi ha comprato di più, chi per ultimo, a chi tocca). Login con Google, solo account autorizzati. Installabile sul telefono come app.
 
-**Stack (tutto gratuito):** HTML/CSS/JS senza build · Firebase Authentication + Cloud Firestore (piano Spark) · Netlify collegato a GitHub.
+**Stack (tutto gratuito):** HTML/CSS/JS senza build · Firebase Authentication + Cloud Firestore + **Firebase Hosting** (piano Spark, senza carta di credito) · codice su GitHub.
 
 ---
 
-## 1. Crea il progetto Firebase (≈10 minuti)
+## 1. Crea il progetto Firebase (dal browser, ≈10 minuti)
 
 1. Vai su <https://console.firebase.google.com> → **Aggiungi progetto** → nome `tracker-casa` → Google Analytics: **disattiva** → Crea.
 2. Menu **Build → Authentication** → *Inizia* → scheda *Metodo di accesso* → **Google** → Abilita → scegli la tua email di assistenza → Salva.
 3. Menu **Build → Firestore Database** → *Crea database* → località **eur3 (Europe)** → *Avvia in modalità produzione* → Crea.
-4. Sempre in Firestore, scheda **Regole** → cancella tutto, incolla il contenuto di `firestore.rules` → **Pubblica**.
-5. Scheda **Dati** → *Avvia raccolta*:
+4. Scheda **Dati** → *Avvia raccolta*:
    - ID raccolta: `members`
    - ID documento: **la tua email Google, tutta minuscola** (es. `mario.rossi@gmail.com`)
    - Campo: `role` · tipo *string* · valore `admin` → Salva.
    (È l'unico dato da inserire a mano: da qui in poi gestisci tutto dall'app.)
-6. ⚙️ **Impostazioni progetto** → in fondo *Le tue app* → icona **`</>`** (Web) → nickname `tracker-casa` → *non* spuntare Hosting → Registra.
-   Copia i valori di `firebaseConfig` e incollali in **`firebase-config.js`** al posto di `INCOLLA_QUI`.
+5. ⚙️ **Impostazioni progetto** → in fondo *Le tue app* → icona **`</>`** (Web) → nickname `tracker-casa` → **spunta "Configura anche Firebase Hosting"** → Registra → Avanti fino alla fine (i comandi che ti mostra li facciamo sotto).
 
-## 2. Pubblica su GitHub + Netlify
+Le regole di sicurezza non vanno copiate a mano: le pubblica il comando `firebase deploy`.
 
-1. Apri `netlify.toml` e sostituisci le due volte `TUO-PROJECT-ID` con il `projectId` di `firebase-config.js` (serve al login su iPhone).
-2. Su GitHub crea un repository (es. `tracker-casa`, anche privato) e carica tutti i file di questa cartella.
-3. Su <https://app.netlify.com> → **Add new site → Import an existing project → GitHub** → scegli il repo.
-   - Build command: *vuoto* · Publish directory: `.` → **Deploy**.
-4. Copia l'indirizzo del sito (es. `tracker-casa-xyz.netlify.app`; puoi rinominarlo in *Site configuration → Change site name*).
-5. Torna su Firebase → **Authentication → Impostazioni → Domini autorizzati** → *Aggiungi dominio* → incolla `tracker-casa-xyz.netlify.app`.
-6. **Solo per iPhone (importante):** vai su <https://console.cloud.google.com/apis/credentials> (stesso account, progetto `tracker-casa`) → *ID client OAuth 2.0* → **Web client (auto created by Google Service)** → in *URI di reindirizzamento autorizzati* aggiungi
-   `https://tracker-casa-xyz.netlify.app/__/auth/handler` → Salva (può servire qualche minuto).
+## 2. Pubblica l'app (dal Mac, una volta sola)
 
-Da ora ogni modifica caricata su GitHub viene pubblicata da Netlify in automatico.
+Scompatta lo zip, poi apri il **Terminale**:
+
+```bash
+# 1) installa lo strumento Firebase (non serve Node; può chiederti la password del Mac)
+curl -sL https://firebase.tools | bash
+
+# 2) accedi con lo stesso account Google della console
+firebase login
+
+# 3) entra nella cartella dell'app (trascina la cartella nel Terminale dopo "cd ")
+cd ~/Downloads/tracker-casa
+
+# 4) collega la cartella al tuo progetto: scegli tracker-casa, come alias scrivi: default
+firebase use --add
+
+# 5) pubblica app + regole di sicurezza
+firebase deploy
+```
+
+Alla fine compare l'indirizzo dell'app, tipo **`https://tracker-casa-xxxx.web.app`**. Fatto: login su iPhone compreso, nessun'altra configurazione.
+
+### Aggiornamenti automatici da GitHub (facoltativo)
+
+1. Crea su GitHub un repository **privato** `tracker-casa` e carica i file (con GitHub Desktop o dal sito).
+2. Nel Terminale, dentro la cartella: `firebase init hosting:github` → scrivi `tuonome/tracker-casa` → *build script?* **No** → *deploy automatico quando fai merge?* **Sì**, branch `main`.
+
+Da quel momento ogni modifica caricata su `main` viene pubblicata da sola. Senza GitHub basta rilanciare `firebase deploy`.
 
 ## 3. Primo avvio
 
-1. Apri il sito, **Accedi con Google** con l'account admin.
+1. Apri l'indirizzo `…web.app`, **Accedi con Google** con l'account admin.
 2. Scheda **Admin → Importa dati dal foglio Google**: crea le 3 coinquiline, i 15 prodotti e i 42 acquisti del foglio (come "storico senza data").
 3. Manda il link alle ragazze: entrano con **il loro account Google** e vedono "Richiesta inviata".
 4. Tu apri **Admin → 🔔 Richieste di accesso** e per ognuna tocchi chi è (Fede · Federica, Berta · Beatrice, Minkia · Rosi). L'app si apre da sola sul loro telefono, già filtrata sui loro prodotti.
@@ -74,13 +91,21 @@ All'import, **Carta Igienica, Dentifricio e Sapone Mani** sono assegnati a **Fed
 - `purchases/{auto}` → `productId`, `personId`, `date`, `note`, `createdBy`, `createdAt`, `historical`, `count` (solo storico)
 - `missing/{productId}` → `addedBy`, `addedByEmail`, `addedAt`
 
-La sicurezza è nelle regole (`firestore.rules`): chi non è in `members` non legge e non scrive nulla.
+La sicurezza è nelle regole (`firestore.rules`, pubblicate con `firebase deploy`): chi non è in `members` non legge e non scrive nulla.
+
+## Limiti gratuiti (piano Spark)
+
+Nessuna carta di credito, quindi **nessun addebito possibile**. Se un limite giornaliero venisse superato, quella parte si ferma fino al reset (le 9:00 circa, ora italiana) e poi riparte da sola. Per 3 persone siamo molto lontani:
+- Hosting: 360 MB/giorno di traffico — l'app pesa ~120 KB e resta in cache sul telefono.
+- Firestore: 50.000 letture e 20.000 scritture al giorno — un'apertura dell'app ne usa qualche decina.
+- Le pubblicazioni (`firebase deploy`) non consumano traffico.
 
 ## Release
 
 Ogni modifica è una release, registrata in `CHANGELOG.md`:
 1. aumenta la versione in `version.js` **e** `CACHE` in `sw.js` (es. `1.0.0` → `1.1.0`);
 2. aggiungi la voce in cima a `CHANGELOG.md`;
-3. commit `Release vX.Y.Z` + tag `vX.Y.Z` (opzionale: *Releases → Draft new release* su GitHub).
+3. commit `Release vX.Y.Z` + tag `vX.Y.Z` (opzionale: *Releases → Draft new release* su GitHub);
+4. `firebase deploy` (o push su `main` se hai attivato il deploy automatico).
 
 Versioni: **MAJOR** = cambia la struttura dati · **MINOR** = nuova funzione · **PATCH** = correzione.

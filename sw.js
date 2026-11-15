@@ -1,6 +1,6 @@
 // Service worker: rende l'app installabile e usabile anche con rete scarsa.
 // Ad ogni release cambia CACHE (stesso numero di version.js).
-const CACHE = "tracker-casa-1.2.0";
+const CACHE = "tracker-casa-1.3.0";
 const SHELL = [
   "./", "index.html", "styles.css", "app.js", "version.js", "seed.js",
   "firebase-config.js", "manifest.webmanifest",
@@ -23,6 +23,7 @@ self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
+  if (url.pathname.startsWith("/__/")) return; // login e configurazione Firebase: mai in cache
 
   // SDK Firebase dal CDN: cache-first (file versionati, non cambiano)
   if (url.hostname === "www.gstatic.com") {

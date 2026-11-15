@@ -2,6 +2,17 @@
 
 Tutte le modifiche all'app sono registrate qui. Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioni [SemVer](https://semver.org/lang/it/).
 
+## [1.3.0] — 2026-11-15
+### Modificato
+- **Hosting spostato da Netlify a Firebase Hosting** (gratuito, non consuma i crediti Netlify).
+- La configurazione Firebase viene letta in automatico da `/__/firebase/init.json`: non serve più incollarla.
+- Login su iPhone sullo stesso dominio dell'app senza proxy né passaggi su Google Cloud.
+- Le regole Firestore si pubblicano con `firebase deploy` insieme all'app.
+- Il service worker non mette mai in cache gli indirizzi `/__/` (login e configurazione).
+
+### Rimosso
+- `netlify.toml`.
+
 ## [1.2.0] — 2026-11-15
 ### Aggiunto
 - **Richieste di accesso**: chi entra con Google senza essere autorizzato invia una richiesta e aspetta; l'amministratore in Admin tocca "chi è" (Fede, Berta, Minkia) e l'app le si apre da sola. Non serve più conoscere le email in anticipo.

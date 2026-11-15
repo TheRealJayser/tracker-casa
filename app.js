@@ -107,14 +107,18 @@ function suggestedTurn(stats, productId) {
 }
 
 // ---------------------------------------------------------------- Firebase
-const configured = firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("INCOLLA");
-let auth, db;
-// iPhone: Safari blocca i cookie di terze parti, quindi il login passa dal nostro stesso dominio
-// (Netlify fa da proxy verso Firebase per /__/auth/*, vedi netlify.toml) e si usa il redirect.
-const hosted = location.protocol === "https:" && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+// Su Firebase Hosting la configurazione arriva da sola (/__/firebase/init.json): non serve incollarla.
+// iPhone: Safari blocca i cookie di terze parti, quindi il login usa lo stesso dominio dell'app e il redirect.
+const hosted = /\.(web\.app|firebaseapp\.com)$/.test(location.hostname);
 const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+let cfg = firebaseConfig;
+if (hosted) {
+  try { const r = await fetch("/__/firebase/init.json"); if (r.ok) cfg = await r.json(); } catch (e) { console.warn(e); }
+}
+const configured = !!cfg.apiKey && !cfg.apiKey.includes("INCOLLA");
+let auth, db;
 if (configured) {
-  const app = initializeApp(hosted ? { ...firebaseConfig, authDomain: location.host } : firebaseConfig);
+  const app = initializeApp(hosted ? { ...cfg, authDomain: location.host } : cfg);
   auth = getAuth(app);
   db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
 }
@@ -541,7 +545,7 @@ function renderShell() {
   closeSheet();
   if (!configured) {
     $app.innerHTML = `<div class="center"><div class="login"><div class="logo">🛠️</div><h1>Quasi pronto</h1>
-      <p>Manca la configurazione di Firebase: incolla i valori del tuo progetto nel file <b>firebase-config.js</b> e ripubblica.</p></div></div>`;
+      <p>Manca la configurazione di Firebase: pubblica l'app con <b>firebase deploy</b> (vedi README).</p></div></div>`;
     return;
   }
   if (S.user === undefined) { $app.innerHTML = `<div class="splash"><div class="splash-logo">🏡</div></div>`; return; }

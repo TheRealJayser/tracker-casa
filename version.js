@@ -1,2 +1,2 @@
 // Versione corrente dell'app. Ad ogni release: aggiorna qui, in sw.js (CACHE) e in CHANGELOG.md.
-export const VERSION = "1.2.0";
+export const VERSION = "1.3.0";

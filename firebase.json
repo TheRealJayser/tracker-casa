@@ -1,0 +1,17 @@
+{
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json", "firestore.rules", ".firebaserc", "**/.*", "**/node_modules/**",
+      "README.md", "CHANGELOG.md"
+    ],
+    "headers": [
+      { "source": "**/*.@(js|webmanifest|html)", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
+      { "source": "/sw.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
+      { "source": "/manifest.webmanifest", "headers": [{ "key": "Content-Type", "value": "application/manifest+json" }] }
+    ]
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  }
+}
