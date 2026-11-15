@@ -22,11 +22,14 @@ Web app per tre coinquiline: lista di **cosa manca in casa**, **registro acquist
 
 ## 2. Pubblica su GitHub + Netlify
 
-1. Su GitHub crea un repository (es. `tracker-casa`, anche privato) e carica tutti i file di questa cartella.
-2. Su <https://app.netlify.com> → **Add new site → Import an existing project → GitHub** → scegli il repo.
+1. Apri `netlify.toml` e sostituisci le due volte `TUO-PROJECT-ID` con il `projectId` di `firebase-config.js` (serve al login su iPhone).
+2. Su GitHub crea un repository (es. `tracker-casa`, anche privato) e carica tutti i file di questa cartella.
+3. Su <https://app.netlify.com> → **Add new site → Import an existing project → GitHub** → scegli il repo.
    - Build command: *vuoto* · Publish directory: `.` → **Deploy**.
-3. Copia l'indirizzo del sito (es. `tracker-casa-xyz.netlify.app`; puoi rinominarlo in *Site configuration → Change site name*).
-4. Torna su Firebase → **Authentication → Impostazioni → Domini autorizzati** → *Aggiungi dominio* → incolla `tracker-casa-xyz.netlify.app`.
+4. Copia l'indirizzo del sito (es. `tracker-casa-xyz.netlify.app`; puoi rinominarlo in *Site configuration → Change site name*).
+5. Torna su Firebase → **Authentication → Impostazioni → Domini autorizzati** → *Aggiungi dominio* → incolla `tracker-casa-xyz.netlify.app`.
+6. **Solo per iPhone (importante):** vai su <https://console.cloud.google.com/apis/credentials> (stesso account, progetto `tracker-casa`) → *ID client OAuth 2.0* → **Web client (auto created by Google Service)** → in *URI di reindirizzamento autorizzati* aggiungi
+   `https://tracker-casa-xyz.netlify.app/__/auth/handler` → Salva (può servire qualche minuto).
 
 Da ora ogni modifica caricata su GitHub viene pubblicata da Netlify in automatico.
 
@@ -37,10 +40,19 @@ Da ora ogni modifica caricata su GitHub viene pubblicata da Netlify in automatic
 3. **Admin → Autorizza un account Google**: aggiungi la Gmail di Fede, Minkia e Berta e collegale al loro nome.
    Se anche tu sei una delle coinquiline, tocca il tuo account e collegalo al tuo nome.
 
-## 4. Installarla sul telefono
+## 4. Installarla su iPhone
 
-- **iPhone (Safari):** tasto Condividi → *Aggiungi a schermata Home*.
-- **Android (Chrome):** menu ⋮ → *Installa app*.
+Apri il sito in **Safari** (non Chrome) → tasto **Condividi** → **Aggiungi alla schermata Home** → Aggiungi. Si apre a schermo intero come un'app, in verticale.
+
+<details><summary>Android</summary>Chrome → menu ⋮ → <i>Installa app</i>.</details>
+
+## Prodotti del bagno
+
+Ogni prodotto ha i suoi **partecipanti** (Admin → Prodotti → tocca un prodotto → *Chi lo compra e lo vede?*).
+- *Tutte*: lo vedono e lo comprano tutte e tre.
+- Solo alcune: lo vedono solo loro; turni e statistiche contano solo loro.
+
+All'import, **Carta Igienica, Dentifricio e Sapone Mani** sono assegnati a **Fede e Berta** (bagno in comune); Minkia non li vede.
 
 ---
 

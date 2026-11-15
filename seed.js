@@ -7,14 +7,15 @@ export const SEED_PEOPLE = [
   { id: "berta", name: "Berta", color: "#1fb58f", order: 3 }
 ];
 
-// [id, nome, emoji, categoria]
+// [id, nome, emoji, categoria, partecipanti (vuoto = tutte)]
+const BAGNO = ["fede", "berta"]; // Minkia ha il bagno da sola
 export const SEED_PRODUCTS = [
   ["scottex", "Scottex", "🧻", "Pulizia"],
-  ["carta-igienica", "Carta Igienica", "🧻", "Igiene"],
+  ["carta-igienica", "Carta Igienica", "🧻", "Bagno", BAGNO],
   ["spugna-piatti", "Spugna Piatti", "🧽", "Cucina"],
   ["detersivo-piatti", "Detersivo Piatti", "🫧", "Cucina"],
-  ["dentifricio", "Dentifricio", "🪥", "Igiene"],
-  ["sapone-mani", "Sapone Mani", "🧼", "Igiene"],
+  ["dentifricio", "Dentifricio", "🪥", "Bagno", BAGNO],
+  ["sapone-mani", "Sapone Mani", "🧼", "Bagno", BAGNO],
   ["sgrassatore", "Sgrassatore", "🧴", "Pulizia"],
   ["sacchetti-frigo", "Sacchetti Frigo", "🛍️", "Cucina"],
   ["pellicola", "Pellicola", "🌯", "Cucina"],

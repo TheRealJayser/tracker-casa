@@ -2,6 +2,13 @@
 
 Tutte le modifiche all'app sono registrate qui. Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioni [SemVer](https://semver.org/lang/it/).
 
+## [1.1.0] — 2026-11-15
+### Aggiunto
+- **Partecipanti per prodotto**: ogni prodotto può essere di tutte o solo di alcune coinquiline. Ognuna vede (lista, prodotti, registro, statistiche) solo ciò a cui partecipa; turni calcolati solo tra le partecipanti.
+- Prodotti del bagno in comune (Carta Igienica, Dentifricio, Sapone Mani) assegnati a Fede e Berta, nuova categoria "Bagno".
+- Ottimizzazione iPhone: login Google tramite redirect sullo stesso dominio (proxy Netlify `/__/auth`), niente zoom sui campi, menu e date in stile iOS, aree sicure.
+- Uso solo in verticale: in orizzontale compare l'invito a ruotare il telefono.
+
 ## [1.0.0] — 2026-11-15
 Prima release.
 

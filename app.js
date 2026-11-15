@@ -47,6 +47,14 @@ const isoToTs = (iso) => { const [y, m, d] = iso.split("-").map(Number); return 
 const person = (id) => S.people.find((p) => p.id === id);
 const product = (id) => S.products.find((p) => p.id === id);
 const activeProducts = () => S.products.filter((p) => !p.archived);
+// Partecipanti di un prodotto: lista vuota/assente = tutte le coinquiline
+const participantIds = (pr) => (pr && pr.participants && pr.participants.length ? pr.participants.filter((id) => person(id)) : S.people.map((p) => p.id));
+const participants = (pr) => S.people.filter((p) => participantIds(pr).includes(p.id));
+const isShared = (pr) => !(pr && pr.participants && pr.participants.length && pr.participants.length < S.people.length);
+// Ogni coinquilina vede solo i prodotti a cui partecipa (l'admin senza persona collegata vede tutto)
+const canSee = (pr) => !!pr && (!myPersonId() || participantIds(pr).includes(myPersonId()));
+const visibleProducts = () => activeProducts().filter(canSee);
+const visiblePurchases = () => S.purchases.filter((pu) => canSee(product(pu.productId)));
 const myPersonId = () => (S.me && S.me.personId && person(S.me.personId) ? S.me.personId : null);
 const isAdmin = () => S.me && S.me.role === "admin";
 
@@ -68,7 +76,7 @@ function computeStats() {
   let total = 0, lastAny = null;
   for (const p of S.people) byPerson[p.id] = 0;
   for (const pr of S.products) byProduct[pr.id] = { total: 0, per: {}, last: null };
-  for (const pu of S.purchases) {
+  for (const pu of visiblePurchases()) {
     const w = weight(pu);
     total += w;
     byPerson[pu.personId] = (byPerson[pu.personId] || 0) + w;
@@ -91,7 +99,7 @@ function suggestedTurn(stats, productId) {
     const d = toDate(pu.date); if (!d) continue;
     if (!lastBy[pu.personId] || d > lastBy[pu.personId]) lastBy[pu.personId] = d;
   }
-  return [...S.people].sort((a, b2) =>
+  return participants(product(productId)).sort((a, b2) =>
     (b.per[a.id] || 0) - (b.per[b2.id] || 0) ||
     ((lastBy[a.id]?.getTime() || 0) - (lastBy[b2.id]?.getTime() || 0)) ||
     (a.order || 0) - (b2.order || 0)
@@ -101,8 +109,12 @@ function suggestedTurn(stats, productId) {
 // ---------------------------------------------------------------- Firebase
 const configured = firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("INCOLLA");
 let auth, db;
+// iPhone: Safari blocca i cookie di terze parti, quindi il login passa dal nostro stesso dominio
+// (Netlify fa da proxy verso Firebase per /__/auth/*, vedi netlify.toml) e si usa il redirect.
+const hosted = location.protocol === "https:" && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 if (configured) {
-  const app = initializeApp(firebaseConfig);
+  const app = initializeApp(hosted ? { ...firebaseConfig, authDomain: location.host } : firebaseConfig);
   auth = getAuth(app);
   db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
 }
@@ -111,6 +123,7 @@ async function login() {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
   try {
+    if (hosted && isIOS) return await signInWithRedirect(auth, provider);
     await signInWithPopup(auth, provider);
   } catch (e) {
     if (["auth/popup-blocked", "auth/operation-not-supported-in-this-environment", "auth/cancelled-popup-request"].includes(e.code)) {
@@ -157,8 +170,8 @@ async function importSeed() {
   if (S.purchases.some((p) => p.historical)) return toast("Dati del foglio già importati");
   const batch = writeBatch(db);
   SEED_PEOPLE.forEach((p) => { if (!person(p.id)) batch.set(doc(db, "people", p.id), { name: p.name, color: p.color, order: p.order }); });
-  SEED_PRODUCTS.forEach(([id, name, emoji, category], i) => {
-    if (!product(id)) batch.set(doc(db, "products", id), { name, emoji, category, order: i + 1, archived: false });
+  SEED_PRODUCTS.forEach(([id, name, emoji, category, parts], i) => {
+    if (!product(id)) batch.set(doc(db, "products", id), { name, emoji, category, participants: parts || [], order: i + 1, archived: false });
   });
   let n = 0;
   for (const [personId, counts] of Object.entries(SEED_COUNTS)) {
@@ -199,8 +212,9 @@ function openPurchase(productId) {
   const pr = product(productId); if (!pr) return;
   if (!S.people.length) return toast("Prima aggiungi le coinquiline (Admin)");
   const stats = computeStats();
-  let chosen = myPersonId() || suggestedTurn(stats, productId)?.id;
-  const chips = () => S.people.map((p) =>
+  const who = participants(pr);
+  let chosen = who.some((p) => p.id === myPersonId()) ? myPersonId() : suggestedTurn(stats, productId)?.id;
+  const chips = () => who.map((p) =>
     `<button class="chip ${p.id === chosen ? "on" : ""}" data-person="${p.id}"><span class="dot" style="background:${esc(p.color)}"></span>${esc(p.name)}</button>`).join("");
   openSheet(`
     <div class="row" style="margin-bottom:6px"><div class="emoji">${esc(pr.emoji || "📦")}</div>
@@ -227,7 +241,7 @@ function openPurchase(productId) {
 }
 
 function openAddMissing() {
-  const list = activeProducts().filter((p) => !S.missing[p.id]);
+  const list = visibleProducts().filter((p) => !S.missing[p.id]);
   openSheet(`<h2>Cosa manca?</h2><div class="sub">Tocca un prodotto per aggiungerlo alla lista</div>
     <input class="search" style="margin-top:12px" placeholder="Cerca…" data-q>
     <div class="pick-list" data-list></div>`, (el) => {
@@ -252,6 +266,9 @@ function openProductEdit(id) {
   const pr = id ? product(id) : { name: "", emoji: "", category: "", archived: false };
   const cats = [...new Set(S.products.map((p) => p.category).filter(Boolean))];
   const used = id && S.purchases.some((p) => p.productId === id);
+  let parts = isShared(pr) ? [] : [...participantIds(pr)];
+  const partChips = () => `<button class="chip ${parts.length ? "" : "on"}" data-part="">Tutte</button>` +
+    S.people.map((p) => `<button class="chip ${parts.includes(p.id) ? "on" : ""}" data-part="${p.id}"><span class="dot" style="background:${esc(p.color)}"></span>${esc(p.name)}</button>`).join("");
   openSheet(`<h2>${id ? "Modifica prodotto" : "Nuovo prodotto"}</h2>
     <label class="lbl">Nome</label>
     <div class="form-row"><input class="field narrow" data-emoji value="${esc(pr.emoji)}" placeholder="📦" maxlength="4">
@@ -259,6 +276,8 @@ function openProductEdit(id) {
     <label class="lbl">Categoria</label>
     <input class="field" data-cat value="${esc(pr.category)}" list="cats" placeholder="Pulizia, Igiene, Cucina, Cibo…" maxlength="24">
     <datalist id="cats">${cats.map((c) => `<option value="${esc(c)}">`).join("")}</datalist>
+    <label class="lbl">Chi lo compra e lo vede?</label><div class="chips" data-parts>${partChips()}</div>
+    <div class="sub" style="margin:0 2px">Es. i prodotti del bagno in comune: solo chi lo condivide.</div>
     <div style="height:18px"></div>
     <button class="btn big primary" data-save>Salva</button>
     ${id ? `<button class="btn big ghost" data-archive>${pr.archived ? "↩︎ Riattiva prodotto" : "🗄 Archivia (nascondi)"}</button>` : ""}
@@ -267,7 +286,7 @@ function openProductEdit(id) {
     el.querySelector("[data-save]").onclick = async () => {
       const name = el.querySelector("[data-name]").value.trim();
       if (!name) return toast("Scrivi un nome");
-      const data = { name, emoji: el.querySelector("[data-emoji]").value.trim() || "📦", category: el.querySelector("[data-cat]").value.trim() || "Altro" };
+      const data = { name, emoji: el.querySelector("[data-emoji]").value.trim() || "📦", category: el.querySelector("[data-cat]").value.trim() || "Altro", participants: parts };
       try {
         if (id) await updateDoc(doc(db, "products", id), data);
         else {
@@ -283,6 +302,14 @@ function openProductEdit(id) {
     el.querySelector("[data-del]")?.addEventListener("click", async () => {
       try { await deleteDoc(doc(db, "products", id)); await setMissing(id, false); closeSheet(); toast("Prodotto eliminato"); } catch (e) { fail(e); }
     });
+    el.querySelector("[data-parts]").onclick = (e) => {
+      const b = e.target.closest("[data-part]"); if (!b) return;
+      const pid = b.dataset.part;
+      if (!pid) parts = [];
+      else parts = parts.includes(pid) ? parts.filter((x) => x !== pid) : [...parts, pid];
+      if (parts.length >= S.people.length) parts = [];
+      el.querySelector("[data-parts]").innerHTML = partChips();
+    };
   });
 }
 
@@ -352,7 +379,7 @@ const TABS = [
 const TITLES = { manca: "Manca in casa", prodotti: "Prodotti", registro: "Registro", stats: "Statistiche", admin: "Gestione" };
 
 function viewManca(stats) {
-  const items = Object.entries(S.missing).map(([id, m]) => ({ pr: product(id), m })).filter((x) => x.pr && !x.pr.archived)
+  const items = Object.entries(S.missing).map(([id, m]) => ({ pr: product(id), m })).filter((x) => x.pr && !x.pr.archived && canSee(x.pr))
     .sort((a, b) => (toDate(a.m.addedAt)?.getTime() || Date.now()) - (toDate(b.m.addedAt)?.getTime() || Date.now()));
   const add = `<button class="btn big primary" data-act="add-missing" style="margin:6px 0 4px">＋ Segna cosa manca</button>`;
   if (!S.products.length) return emptyFirstRun();
@@ -385,14 +412,14 @@ function viewProdotti(stats) {
 }
 function productsGrid(stats) {
   const q = S.search.toLowerCase();
-  const list = activeProducts().filter((p) => p.name.toLowerCase().includes(q));
+  const list = visibleProducts().filter((p) => p.name.toLowerCase().includes(q));
   if (!list.length) return `<div class="empty">Nessun prodotto trovato</div>`;
   const cats = [...new Set(list.map((p) => p.category || "Altro"))];
   return cats.map((c) => `<div class="section-title">${esc(c)}</div><div class="grid">` +
     list.filter((p) => (p.category || "Altro") === c).map((p) => {
       const miss = !!S.missing[p.id], last = stats.byProduct[p.id]?.last;
       return `<div class="pcard ${miss ? "missing" : ""}">
-        <div class="top"><div class="emoji">${esc(p.emoji || "📦")}</div><div class="grow name">${esc(p.name)}</div></div>
+        <div class="top"><div class="emoji">${esc(p.emoji || "📦")}</div><div class="grow name">${esc(p.name)}${isShared(p) ? "" : `<div class="sub">👥 ${participants(p).map((x) => esc(x.name)).join(" e ")}</div>`}</div></div>
         <div class="sub">${miss ? `<span class="tag" style="margin:0">Manca</span> ` : ""}${last ? `${esc(person(last.personId)?.name)} · ${fmtDay(last.date)}` : ((n) => `${n} ${n === 1 ? "acquisto" : "acquisti"}`)(stats.byProduct[p.id]?.total || 0)}</div>
         <div class="actions">
           <button class="btn ${miss ? "warn" : ""}" data-act="toggle-missing" data-id="${p.id}">${miss ? "✕ Tolto" : "Manca"}</button>
@@ -403,7 +430,7 @@ function productsGrid(stats) {
 
 function viewRegistro() {
   const f = S.logFilter;
-  const list = S.purchases.filter((p) => f === "all" || p.personId === f);
+  const list = visiblePurchases().filter((p) => f === "all" || p.personId === f);
   const chips = `<div class="chips"><button class="chip ${f === "all" ? "on" : ""}" data-filter="all">Tutte</button>` +
     S.people.map((p) => `<button class="chip ${f === p.id ? "on" : ""}" data-filter="${p.id}"><span class="dot" style="background:${esc(p.color)}"></span>${esc(p.name)}</button>`).join("") + `</div>`;
   if (!list.length) return chips + `<div class="empty"><div class="hero">🧾</div><h3>Nessun acquisto</h3><p>Gli acquisti registrati compariranno qui.</p></div>`;
@@ -429,10 +456,10 @@ function viewRegistro() {
 }
 
 function viewStats(stats) {
-  if (!S.purchases.length) return `<div class="empty"><div class="hero">📊</div><h3>Ancora niente</h3><p>Le statistiche si riempiono con i primi acquisti.</p></div>`;
+  if (!visiblePurchases().length) return `<div class="empty"><div class="hero">📊</div><h3>Ancora niente</h3><p>Le statistiche si riempiono con i primi acquisti.</p></div>`;
   const ranking = [...S.people].sort((a, b) => (stats.byPerson[b.id] || 0) - (stats.byPerson[a.id] || 0));
   const top = ranking[0];
-  const topProd = [...activeProducts()].sort((a, b) => (stats.byProduct[b.id]?.total || 0) - (stats.byProduct[a.id]?.total || 0))[0];
+  const topProd = [...visibleProducts()].sort((a, b) => (stats.byProduct[b.id]?.total || 0) - (stats.byProduct[a.id]?.total || 0))[0];
   const max = Math.max(1, ...Object.values(stats.byPerson));
   const la = stats.lastAny;
   let html = `<div class="kpis">
@@ -448,14 +475,14 @@ function viewStats(stats) {
       <div class="num">${stats.byPerson[p.id] || 0}</div></div>`).join("") + `</div>`;
 
   // Tabella prodotto × coinquilina (come nel foglio) + ultimo acquirente
-  const prods = activeProducts().sort((a, b) => (stats.byProduct[b.id]?.total || 0) - (stats.byProduct[a.id]?.total || 0));
+  const prods = visibleProducts().sort((a, b) => (stats.byProduct[b.id]?.total || 0) - (stats.byProduct[a.id]?.total || 0));
   html += `<div class="section-title">Per prodotto</div><div class="card"><div class="matrix-wrap"><table class="matrix">
     <thead><tr><th>Prodotto</th>${S.people.map((p) => `<th>${esc(p.name)}</th>`).join("")}<th>Tot</th><th>Ultimo</th></tr></thead><tbody>` +
     prods.map((pr) => {
       const b = stats.byProduct[pr.id] || { per: {}, total: 0 };
       const mx = Math.max(0, ...S.people.map((p) => b.per[p.id] || 0));
       return `<tr><td>${esc(pr.emoji || "")} ${esc(pr.name)}</td>` +
-        S.people.map((p) => { const v = b.per[p.id] || 0; return `<td class="num ${v ? (v === mx ? "lead" : "") : "zero"}">${v}</td>`; }).join("") +
+        S.people.map((p) => { if (!participantIds(pr).includes(p.id)) return `<td class="zero">—</td>`; const v = b.per[p.id] || 0; return `<td class="num ${v ? (v === mx ? "lead" : "") : "zero"}">${v}</td>`; }).join("") +
         `<td class="num lead">${b.total}</td><td class="sub">${b.last ? esc(person(b.last.personId)?.name) : "—"}</td></tr>`;
     }).join("") +
     `<tr class="tot"><td>Totale</td>${S.people.map((p) => `<td class="num">${stats.byPerson[p.id] || 0}</td>`).join("")}<td class="num">${stats.total}</td><td></td></tr>
@@ -479,7 +506,7 @@ function viewAdmin() {
 
   <div class="section-title">Prodotti</div><div class="card">
     ${S.products.map((p) => `<div class="log-item" style="cursor:pointer;${p.archived ? "opacity:.5" : ""}" data-act="edit-product" data-id="${p.id}">
-      <div class="emoji">${esc(p.emoji || "📦")}</div><div class="grow"><div class="name">${esc(p.name)}</div><div class="sub">${esc(p.category || "Altro")}${p.archived ? " · archiviato" : ""}</div></div><span class="muted">›</span></div>`).join("") || `<div class="sub">Nessuno ancora.</div>`}
+      <div class="emoji">${esc(p.emoji || "📦")}</div><div class="grow"><div class="name">${esc(p.name)}</div><div class="sub">${esc(p.category || "Altro")} · ${isShared(p) ? "tutte" : participants(p).map((x) => esc(x.name)).join(" e ")}${p.archived ? " · archiviato" : ""}</div></div><span class="muted">›</span></div>`).join("") || `<div class="sub">Nessuno ancora.</div>`}
     <button class="btn big" style="margin-top:8px" data-act="new-product">＋ Nuovo prodotto</button></div>
 
   <div class="section-title">Dati</div><div class="card">
@@ -509,7 +536,7 @@ function renderShell() {
       <button class="btn big" data-act="logout">Cambia account</button></div></div>`;
     return;
   }
-  $app.innerHTML = `<header class="topbar"><h1 data-title></h1><button data-act="menu" aria-label="Profilo">${avatar(person(myPersonId()) || { name: S.user.displayName || S.user.email, color: "#5b4bdb" })}</button></header>
+  $app.innerHTML = `<header class="topbar"><h1 data-title></h1><button data-act="menu" aria-label="Profilo" data-avatar></button></header>
     <main data-main></main><nav class="tabbar" data-tabs></nav>`;
   render();
 }
@@ -520,8 +547,9 @@ function render() {
   if (S.view === "admin" && !isAdmin()) S.view = "manca";
   const stats = computeStats();
   $app.querySelector("[data-title]").textContent = TITLES[S.view];
+  $app.querySelector("[data-avatar]").innerHTML = avatar(person(myPersonId()) || { name: S.user.displayName || S.user.email, color: "#5b4bdb" });
   const tabs = [...TABS, ...(isAdmin() ? [{ id: "admin", ico: "⚙️", label: "Admin" }] : [])];
-  const missCount = Object.keys(S.missing).filter((id) => product(id) && !product(id).archived).length;
+  const missCount = Object.keys(S.missing).filter((id) => product(id) && !product(id).archived && canSee(product(id))).length;
   $app.querySelector("[data-tabs]").innerHTML = tabs.map((t) =>
     `<button class="tab ${S.view === t.id ? "active" : ""}" data-tab="${t.id}"><span class="ico">${t.ico}</span>${t.label}${t.id === "manca" && missCount ? `<span class="badge">${missCount}</span>` : ""}</button>`).join("");
   const focused = document.activeElement?.matches?.("[data-search]");
