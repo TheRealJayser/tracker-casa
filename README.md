@@ -3,7 +3,8 @@
 <p align="center">
   <a href="https://tracker-casa-a0c47.web.app"><b>🌐 Apri l'app</b></a> ·
   <a href="CHANGELOG.md">📝 Novità</a> ·
-  <img alt="versione" src="https://img.shields.io/badge/versione-1.5.0-5B4BDB">
+  <a href="https://github.com/TheRealJayser/tracker-casa/releases">🏷️ Release</a> ·
+  <img alt="versione" src="https://img.shields.io/badge/versione-1.5.1-5B4BDB">
   <img alt="iPhone" src="https://img.shields.io/badge/iPhone-PWA-1d1b22?logo=apple">
   <img alt="Firebase" src="https://img.shields.io/badge/Firebase-Spark%20(gratis)-FFCA28?logo=firebase&logoColor=black">
 </p>
@@ -127,7 +128,7 @@ Nessuna carta di credito, quindi **nessun addebito possibile**. Se un limite gio
 Ogni modifica è una release, registrata in `CHANGELOG.md`:
 1. aumenta la versione in `version.js` **e** `CACHE` in `sw.js` (es. `1.0.0` → `1.1.0`);
 2. aggiungi la voce in cima a `CHANGELOG.md`;
-3. commit `Release vX.Y.Z` + tag `vX.Y.Z` (opzionale: *Releases → Draft new release* su GitHub);
+3. commit `Release vX.Y.Z` (il titolo della sezione nel CHANGELOG diventa il titolo della Release, creata in automatico da GitHub);
 4. `firebase deploy` (o push su `main` se hai attivato il deploy automatico).
 
 Versioni: **MAJOR** = cambia la struttura dati · **MINOR** = nuova funzione · **PATCH** = correzione.
