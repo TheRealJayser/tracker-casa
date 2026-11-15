@@ -1,10 +1,10 @@
 // Service worker: rende l'app installabile e usabile anche con rete scarsa.
 // Ad ogni release cambia CACHE (stesso numero di version.js).
-const CACHE = "tracker-casa-1.3.2";
+const CACHE = "tracker-casa-1.4.0";
 const SHELL = [
   "./", "index.html", "styles.css", "app.js", "version.js", "seed.js",
   "firebase-config.js", "manifest.webmanifest",
-  "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"
+  "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png", "icons/icon.svg", "icons/favicon-32.png"
 ];
 
 self.addEventListener("install", (e) => {

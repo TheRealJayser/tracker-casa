@@ -1,6 +1,27 @@
+<p align="center"><img src="docs/banner.png" alt="Tracker Casa" width="100%"></p>
+
+<p align="center">
+  <a href="https://tracker-casa-a0c47.web.app"><b>🌐 Apri l'app</b></a> ·
+  <a href="CHANGELOG.md">📝 Novità</a> ·
+  <img alt="versione" src="https://img.shields.io/badge/versione-1.4.0-5B4BDB">
+  <img alt="iPhone" src="https://img.shields.io/badge/iPhone-PWA-1d1b22?logo=apple">
+  <img alt="Firebase" src="https://img.shields.io/badge/Firebase-Spark%20(gratis)-FFCA28?logo=firebase&logoColor=black">
+</p>
+
 # 🏡 Tracker Casa
 
-Web app per tre coinquiline: lista di **cosa manca in casa**, **registro acquisti**, **statistiche** (chi ha comprato di più, chi per ultimo, a chi tocca). Login con Google, solo account autorizzati. Installabile sul telefono come app.
+App per tre coinquiline: lista di **cosa manca in casa**, **registro acquisti**, **statistiche** (chi ha comprato di più, chi per ultimo, a chi tocca). Login con Google, solo account autorizzati. Si installa sull'iPhone come una vera app.
+
+<p align="center"><img src="docs/screenshots.png" alt="Schermate dell'app" width="100%"></p>
+
+## ✨ Cosa fa
+
+- 📝 **Manca in casa** — lista condivisa, con chi l'ha segnato e **a chi tocca** comprarlo.
+- 🧺 **Prodotti** — per categoria, un tocco per "Manca" o "✓ Preso".
+- 🛁 **Bagno condiviso** — ogni prodotto ha le sue partecipanti: ognuna vede solo le cose che compra anche lei.
+- 🧾 **Registro** — tutti gli acquisti giorno per giorno.
+- 📊 **Statistiche** — chi ha comprato di più, chi per ultimo, tabella prodotto × coinquilina.
+- 🔐 **Accesso controllato** — si entra con Google, l'amministratore conferma chi è chi.
 
 **Stack (tutto gratuito):** HTML/CSS/JS senza build · Firebase Authentication + Cloud Firestore + **Firebase Hosting** (piano Spark, senza carta di credito) · codice su GitHub.
 

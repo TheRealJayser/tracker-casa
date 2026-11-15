@@ -249,3 +249,6 @@ select.field { -webkit-appearance: none; appearance: none;
   .rotate { display: grid; place-items: center; text-align: center; position: fixed; inset: 0; z-index: 100;
     background: var(--bg); color: var(--ink); font-weight: 650; font-size: 18px; gap: 8px; }
 }
+
+/* Icona dell'app nella schermata di accesso */
+.app-icon { width: 96px; height: 96px; border-radius: 22px; box-shadow: 0 10px 30px rgba(62, 47, 176, .35); display: block; margin: 0 auto 6px; }
