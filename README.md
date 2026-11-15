@@ -20,7 +20,11 @@ Web app per tre coinquiline: lista di **cosa manca in casa**, **registro acquist
 
 Le regole di sicurezza non vanno copiate a mano: le pubblica il comando `firebase deploy`.
 
-## 2. Pubblica l'app (dal Mac, una volta sola)
+## 2. Pubblica l'app
+
+**Automatico (consigliato):** il repository GitHub `TheRealJayser/tracker-casa` pubblica da solo l'app a ogni modifica su `main` (GitHub Actions → `.github/workflows/deploy.yml`). Le regole di sicurezza si aggiornano dalla console Firebase → Firestore → Regole.
+
+**In alternativa, dal Mac con il Terminale** (sui Mac con chip Apple serve prima `softwareupdate --install-rosetta --agree-to-license`):
 
 Scompatta lo zip, poi apri il **Terminale**:
 

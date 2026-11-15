@@ -2,6 +2,10 @@
 
 Tutte le modifiche all'app sono registrate qui. Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioni [SemVer](https://semver.org/lang/it/).
 
+## [1.3.2] — 2026-11-15
+### Aggiunto
+- Pubblicazione automatica con GitHub Actions (`.github/workflows/deploy.yml`): ogni push su `main` pubblica l'app su Firebase Hosting, senza Terminale.
+
 ## [1.3.1] — 2026-11-15
 ### Modificato
 - Progetto Firebase `tracker-casa-a0c47` già collegato in `.firebaserc`: per pubblicare basta `firebase deploy`.
