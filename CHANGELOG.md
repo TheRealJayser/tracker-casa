@@ -2,6 +2,14 @@
 
 Tutte le modifiche all'app sono registrate qui. Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioni [SemVer](https://semver.org/lang/it/).
 
+## [1.5.0] — 2026-11-15
+### Aggiunto
+- **Nuova barra in basso in stile iOS**: capsula "di vetro" sospesa, icone disegnate come quelle di iOS, pillola che scorre con effetto molla sotto la scheda attiva, numeri che saltano quando cambiano, tocco con piccolo rimbalzo.
+- Cambio scheda con dissolvenza del contenuto; toccare la scheda già aperta riporta in cima.
+
+### Corretto
+- I pannelli dal basso (es. "Cosa manca?") ora si chiudono **trascinandoli giù**, con la **X** in alto a destra, toccando la lineetta o toccando fuori; la chiusura è animata.
+
 ## [1.4.3] — 2026-11-15
 ### Corretto
 - Login con Google su iPhone: risolto "Errore 400: redirect_uri_mismatch". Ora il login si apre in una finestra (popup) sul dominio già autorizzato di Firebase, senza bisogno di configurare Google Cloud.

@@ -205,14 +205,55 @@ async function approveRequest(email, personId) {
 }
 
 // ---------------------------------------------------------------- Bottom sheet
+let sheetToken = 0;
 function openSheet(html, mount) {
-  $sheet.innerHTML = `<div class="sheet-backdrop" data-close></div><div class="sheet" role="dialog"><div class="grab"></div>${html}</div>`;
+  sheetToken++;
+  $sheet.innerHTML = `<div class="sheet-backdrop" data-close></div><div class="sheet" role="dialog" aria-modal="true">
+    <div class="grab-zone" data-grab><div class="grab"></div></div>
+    <button class="sheet-x" data-x aria-label="Chiudi"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>${html}</div>`;
   const el = $sheet.querySelector(".sheet");
   $sheet.querySelector("[data-close]").onclick = closeSheet;
+  el.querySelector("[data-x]").onclick = closeSheet;
+  el.querySelector("[data-grab]").onclick = closeSheet;
   el.querySelectorAll("[data-dismiss]").forEach((b) => (b.onclick = closeSheet));
+  enableSheetDrag(el);
   mount && mount(el);
 }
-function closeSheet() { $sheet.innerHTML = ""; }
+function closeSheet() {
+  const el = $sheet.querySelector(".sheet");
+  if (!el) return;
+  const token = sheetToken;
+  el.style.transition = ""; el.style.transform = "";
+  $sheet.classList.add("closing");
+  setTimeout(() => { if (token === sheetToken) $sheet.innerHTML = ""; $sheet.classList.remove("closing"); }, 260);
+}
+// Trascina giù il pannello per chiuderlo (come su iOS)
+function enableSheetDrag(el) {
+  const bd = $sheet.querySelector(".sheet-backdrop");
+  let y0 = null, dy = 0, t0 = 0, dragging = false;
+  el.addEventListener("touchstart", (e) => {
+    if (el.scrollTop > 0 && !e.target.closest("[data-grab]")) { y0 = null; return; }
+    y0 = e.touches[0].clientY; t0 = Date.now(); dy = 0; dragging = false;
+  }, { passive: true });
+  el.addEventListener("touchmove", (e) => {
+    if (y0 === null) return;
+    dy = e.touches[0].clientY - y0;
+    if (!dragging && dy > 6) { dragging = true; el.style.transition = "none"; }
+    if (!dragging) { if (dy < 0) y0 = null; return; }
+    e.preventDefault();
+    const d = Math.max(0, dy);
+    el.style.transform = `translateY(${d}px)`;
+    bd.style.opacity = String(Math.max(0.15, 1 - d / 400));
+  }, { passive: false });
+  el.addEventListener("touchend", () => {
+    if (y0 === null || !dragging) { y0 = null; return; }
+    const v = dy / Math.max(1, Date.now() - t0);
+    y0 = null; dragging = false;
+    el.style.transition = "transform .3s cubic-bezier(.2,.9,.3,1)"; bd.style.opacity = "";
+    if (dy > 110 || v > 0.6) closeSheet();
+    else el.style.transform = "";
+  });
+}
 function confirmSheet(title, text, okLabel = "Conferma", danger = true) {
   return new Promise((resolve) => {
     openSheet(`<h2>${esc(title)}</h2><p class="muted">${esc(text)}</p>
@@ -389,11 +430,48 @@ function openMemberEdit(email) {
 
 // ---------------------------------------------------------------- Viste
 const TABS = [
-  { id: "manca", ico: "📝", label: "Manca" },
-  { id: "prodotti", ico: "🧺", label: "Prodotti" },
-  { id: "registro", ico: "🧾", label: "Registro" },
-  { id: "stats", ico: "📊", label: "Statistiche" }
+  { id: "manca", label: "Manca" },
+  { id: "prodotti", label: "Prodotti" },
+  { id: "registro", label: "Registro" },
+  { id: "stats", label: "Statistiche" }
 ];
+const ICONS = {
+  manca: '<path d="M10 6h10M10 12h10M10 18h10"/><path d="M3.5 6l1.5 1.5L8 4.5M3.5 12l1.5 1.5L8 10.5M3.5 18l1.5 1.5L8 16.5"/>',
+  prodotti: '<path d="M4 10h16l-1.6 8.6A2 2 0 0 1 16.4 20H7.6a2 2 0 0 1-2-1.4L4 10z"/><path d="M8 10l4-6 4 6M9.5 14v2.5M14.5 14v2.5"/>',
+  registro: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+  stats: '<path d="M5 20v-7M12 20V5M19 20v-10"/>',
+  admin: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'
+};
+
+// Barra in basso "a capsula" in stile iOS: i pulsanti restano gli stessi, la pillola scorre sotto quello attivo.
+function renderTabs(missCount) {
+  const nav = $app.querySelector("[data-tabs]");
+  const tabs = [...TABS, ...(isAdmin() ? [{ id: "admin", label: "Admin" }] : [])];
+  const key = tabs.map((t) => t.id).join();
+  if (nav.dataset.key !== key) {
+    nav.dataset.key = key;
+    nav.innerHTML = `<span class="tab-pill" aria-hidden="true"></span>` + tabs.map((t) =>
+      `<button class="tab" data-tab="${t.id}"><span class="ico"><svg viewBox="0 0 24 24">${ICONS[t.id]}</svg><span class="badge" hidden></span></span><span class="lbl">${t.label}</span></button>`).join("");
+    nav.classList.add("no-anim");
+  }
+  nav.querySelectorAll(".tab").forEach((b) => {
+    const on = b.dataset.tab === S.view;
+    b.classList.toggle("active", on);
+    b.setAttribute("aria-current", on ? "page" : "false");
+    const n = b.dataset.tab === "manca" ? missCount : b.dataset.tab === "admin" ? S.requests.length : 0;
+    const badge = b.querySelector(".badge");
+    if (String(n) !== badge.textContent && n) { badge.classList.remove("bump"); void badge.offsetWidth; badge.classList.add("bump"); }
+    badge.hidden = !n; badge.textContent = n ? String(n) : "";
+  });
+  requestAnimationFrame(() => { movePill(nav); requestAnimationFrame(() => nav.classList.remove("no-anim")); });
+}
+function movePill(nav = $app.querySelector("[data-tabs]")) {
+  const a = nav && nav.querySelector(".tab.active"), pill = nav && nav.querySelector(".tab-pill");
+  if (!a || !pill) return;
+  pill.style.width = a.offsetWidth + "px";
+  pill.style.transform = `translateX(${a.offsetLeft}px)`;
+}
+window.addEventListener("resize", () => movePill());
 const TITLES = { manca: "Manca in casa", prodotti: "Prodotti", registro: "Registro", stats: "Statistiche", admin: "Gestione" };
 
 function viewManca(stats) {
@@ -576,10 +654,8 @@ function render() {
   const stats = computeStats();
   $app.querySelector("[data-title]").textContent = TITLES[S.view];
   $app.querySelector("[data-avatar]").innerHTML = avatar(person(myPersonId()) || { name: S.user.displayName || S.user.email, color: "#5b4bdb" });
-  const tabs = [...TABS, ...(isAdmin() ? [{ id: "admin", ico: "⚙️", label: "Admin" }] : [])];
   const missCount = Object.keys(S.missing).filter((id) => product(id) && !product(id).archived && canSee(product(id))).length;
-  $app.querySelector("[data-tabs]").innerHTML = tabs.map((t) =>
-    `<button class="tab ${S.view === t.id ? "active" : ""}" data-tab="${t.id}"><span class="ico">${t.ico}</span>${t.label}${t.id === "manca" && missCount ? `<span class="badge">${missCount}</span>` : ""}${t.id === "admin" && S.requests.length ? `<span class="badge">${S.requests.length}</span>` : ""}</button>`).join("");
+  renderTabs(missCount);
   const focused = document.activeElement?.matches?.("[data-search]");
   main.innerHTML = { manca: viewManca, prodotti: viewProdotti, registro: viewRegistro, stats: viewStats, admin: viewAdmin }[S.view](stats);
   if (focused) { const s = main.querySelector("[data-search]"); s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
@@ -588,7 +664,12 @@ function render() {
 // ---------------------------------------------------------------- Eventi (delegati)
 $app.addEventListener("click", async (e) => {
   const tab = e.target.closest("[data-tab]");
-  if (tab) { S.view = tab.dataset.tab; localStorage.setItem("view", S.view); render(); window.scrollTo({ top: 0 }); return; }
+  if (tab) {
+    if (S.view === tab.dataset.tab) { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+    S.view = tab.dataset.tab; localStorage.setItem("view", S.view); render(); window.scrollTo({ top: 0 });
+    const m = $app.querySelector("[data-main]"); m.classList.remove("view-enter"); void m.offsetWidth; m.classList.add("view-enter");
+    return;
+  }
   const filt = e.target.closest("[data-filter]");
   if (filt) { S.logFilter = filt.dataset.filter; render(); return; }
   const a = e.target.closest("[data-act]"); if (!a) return;

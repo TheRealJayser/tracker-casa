@@ -3,7 +3,7 @@
 <p align="center">
   <a href="https://tracker-casa-a0c47.web.app"><b>🌐 Apri l'app</b></a> ·
   <a href="CHANGELOG.md">📝 Novità</a> ·
-  <img alt="versione" src="https://img.shields.io/badge/versione-1.4.3-5B4BDB">
+  <img alt="versione" src="https://img.shields.io/badge/versione-1.5.0-5B4BDB">
   <img alt="iPhone" src="https://img.shields.io/badge/iPhone-PWA-1d1b22?logo=apple">
   <img alt="Firebase" src="https://img.shields.io/badge/Firebase-Spark%20(gratis)-FFCA28?logo=firebase&logoColor=black">
 </p>
