@@ -2,6 +2,15 @@
 
 Tutte le modifiche all'app sono registrate qui. Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioni [SemVer](https://semver.org/lang/it/).
 
+## [1.2.0] — 2026-11-15
+### Aggiunto
+- **Richieste di accesso**: chi entra con Google senza essere autorizzato invia una richiesta e aspetta; l'amministratore in Admin tocca "chi è" (Fede, Berta, Minkia) e l'app le si apre da sola. Non serve più conoscere le email in anticipo.
+- Nome vero delle coinquiline (Federica, Beatrice, Rosi) accanto al soprannome.
+- Badge sulla scheda Admin con le richieste in attesa.
+
+### Modificato
+- Regole Firestore: nuova raccolta `requests`.
+
 ## [1.1.0] — 2026-11-15
 ### Aggiunto
 - **Partecipanti per prodotto**: ogni prodotto può essere di tutte o solo di alcune coinquiline. Ognuna vede (lista, prodotti, registro, statistiche) solo ciò a cui partecipa; turni calcolati solo tra le partecipanti.

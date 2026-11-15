@@ -16,7 +16,7 @@ import { SEED_PEOPLE, SEED_PRODUCTS, SEED_COUNTS } from "./seed.js";
 // ---------------------------------------------------------------- Stato
 const S = {
   user: null, me: null,               // utente Firebase e documento members
-  people: [], products: [], purchases: [], missing: {}, members: [],
+  people: [], products: [], purchases: [], missing: {}, members: [], requests: [],
   view: localStorage.getItem("view") || "manca",
   logFilter: "all", search: "",
   unsub: []
@@ -142,7 +142,10 @@ function startListeners() {
   listen("products", (snap) => { S.products = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort(sortByOrder); render(); });
   listen("purchases", (snap) => { S.purchases = snap.docs.map((d) => ({ id: d.id, ...d.data() })); render(); });
   listen("missing", (snap) => { S.missing = Object.fromEntries(snap.docs.map((d) => [d.id, d.data()])); render(); });
-  if (isAdmin()) listen("members", (snap) => { S.members = snap.docs.map((d) => ({ email: d.id, ...d.data() })); render(); });
+  if (isAdmin()) {
+    listen("members", (snap) => { S.members = snap.docs.map((d) => ({ email: d.id, ...d.data() })); render(); });
+    listen("requests", (snap) => { S.requests = snap.docs.map((d) => ({ email: d.id, ...d.data() })); render(); });
+  }
   // Aggiorna il proprio profilo membro (es. persona collegata) in tempo reale
   S.unsub.push(onSnapshot(doc(db, "members", S.user.email.toLowerCase()), (d) => {
     if (!d.exists()) { S.me = null; stopListeners(); renderShell(); return; }
@@ -169,7 +172,7 @@ async function setMissing(productId, on) {
 async function importSeed() {
   if (S.purchases.some((p) => p.historical)) return toast("Dati del foglio già importati");
   const batch = writeBatch(db);
-  SEED_PEOPLE.forEach((p) => { if (!person(p.id)) batch.set(doc(db, "people", p.id), { name: p.name, color: p.color, order: p.order }); });
+  SEED_PEOPLE.forEach((p) => { if (!person(p.id)) batch.set(doc(db, "people", p.id), { name: p.name, fullName: p.fullName, color: p.color, order: p.order }); });
   SEED_PRODUCTS.forEach(([id, name, emoji, category, parts], i) => {
     if (!product(id)) batch.set(doc(db, "products", id), { name, emoji, category, participants: parts || [], order: i + 1, archived: false });
   });
@@ -186,6 +189,14 @@ async function importSeed() {
   }
   await batch.commit();
   toast(`Importati ${n} acquisti dal foglio ✓`);
+}
+
+async function approveRequest(email, personId) {
+  const batch = writeBatch(db);
+  batch.set(doc(db, "members", email), { role: "member", personId });
+  batch.delete(doc(db, "requests", email));
+  await batch.commit();
+  toast(`${person(personId)?.name} può entrare ✓`);
 }
 
 // ---------------------------------------------------------------- Bottom sheet
@@ -319,7 +330,8 @@ function openPersonEdit(id) {
   let color = p.color;
   const sw = () => COLORS.map((c) => `<button class="avatar" data-c="${c}" style="background:${c};outline:${c === color ? "3px solid var(--ink)" : "none"};outline-offset:2px"></button>`).join("");
   openSheet(`<h2>${id ? "Modifica coinquilina" : "Nuova coinquilina"}</h2>
-    <label class="lbl">Nome</label><input class="field" data-name value="${esc(p.name)}" maxlength="20">
+    <label class="lbl">Soprannome (quello che si vede nell'app)</label><input class="field" data-name value="${esc(p.name)}" maxlength="20">
+    <label class="lbl">Nome vero (facoltativo)</label><input class="field" data-full value="${esc(p.fullName || "")}" maxlength="30">
     <label class="lbl">Colore</label><div class="chips" data-sw>${sw()}</div>
     <div style="height:18px"></div>
     <button class="btn big primary" data-save>Salva</button>
@@ -328,10 +340,11 @@ function openPersonEdit(id) {
     el.querySelector("[data-save]").onclick = async () => {
       const name = el.querySelector("[data-name]").value.trim(); if (!name) return toast("Scrivi un nome");
       try {
-        if (id) await updateDoc(doc(db, "people", id), { name, color });
+        const fullName = el.querySelector("[data-full]").value.trim();
+        if (id) await updateDoc(doc(db, "people", id), { name, fullName, color });
         else {
           let nid = slug(name); while (person(nid)) nid += "-2";
-          await setDoc(doc(db, "people", nid), { name, color, order: Math.max(0, ...S.people.map((x) => x.order || 0)) + 1 });
+          await setDoc(doc(db, "people", nid), { name, fullName, color, order: Math.max(0, ...S.people.map((x) => x.order || 0)) + 1 });
         }
         closeSheet(); toast("Salvato ✓");
       } catch (e) { fail(e); }
@@ -493,7 +506,16 @@ function viewStats(stats) {
 function viewAdmin() {
   if (!isAdmin()) return "";
   const hasHist = S.purchases.some((p) => p.historical);
-  return `
+  const linked = new Set(S.members.map((m) => m.personId).filter(Boolean));
+  const free = S.people.filter((p) => !linked.has(p.id));
+  const reqs = S.requests.length ? `<div class="section-title">🔔 Richieste di accesso</div>` + S.requests.map((r) => `<div class="card">
+      <div class="row">${r.photo ? `<img src="${esc(r.photo)}" class="avatar" style="object-fit:cover" referrerpolicy="no-referrer" alt="">` : avatar({ name: r.name || r.email, color: "#888" })}
+        <div class="grow"><div class="name">${esc(r.name || "Senza nome")}</div><div class="sub">${esc(r.email)}</div></div></div>
+      <div class="sub" style="margin:10px 2px 6px">Chi è?</div>
+      <div class="chips" style="flex-wrap:wrap">${(free.length ? free : S.people).map((p) => `<button class="chip" data-act="approve" data-email="${esc(r.email)}" data-id="${p.id}"><span class="dot" style="background:${esc(p.color)}"></span>${esc(p.name)}${p.fullName ? ` <span class="muted">· ${esc(p.fullName)}</span>` : ""}</button>`).join("")}
+        <button class="chip" data-act="reject" data-email="${esc(r.email)}" style="color:var(--warn)">Rifiuta</button></div>
+    </div>`).join("") : "";
+  return reqs + `
   <div class="section-title">Account autorizzati</div><div class="card">
     ${S.members.map((m) => `<div class="log-item" style="cursor:pointer" data-act="edit-member" data-id="${esc(m.email)}">
       ${avatar(person(m.personId), 38)}<div class="grow"><div class="name">${esc(m.email)}</div>
@@ -501,7 +523,7 @@ function viewAdmin() {
     <button class="btn big" style="margin-top:8px" data-act="new-member">＋ Autorizza un account Google</button></div>
 
   <div class="section-title">Coinquiline</div><div class="card">
-    ${S.people.map((p) => `<div class="log-item" style="cursor:pointer" data-act="edit-person" data-id="${p.id}">${avatar(p, 38)}<div class="grow name">${esc(p.name)}</div><span class="muted">›</span></div>`).join("") || `<div class="sub">Nessuna ancora.</div>`}
+    ${S.people.map((p) => `<div class="log-item" style="cursor:pointer" data-act="edit-person" data-id="${p.id}">${avatar(p, 38)}<div class="grow"><div class="name">${esc(p.name)}</div><div class="sub">${esc(p.fullName || "")}${S.members.find((m) => m.personId === p.id) ? ` · ${esc(S.members.find((m) => m.personId === p.id).email)}` : " · non ancora collegata"}</div></div><span class="muted">›</span></div>`).join("") || `<div class="sub">Nessuna ancora.</div>`}
     <button class="btn big" style="margin-top:8px" data-act="new-person">＋ Aggiungi coinquilina</button></div>
 
   <div class="section-title">Prodotti</div><div class="card">
@@ -531,8 +553,9 @@ function renderShell() {
     return;
   }
   if (!S.me) {
-    $app.innerHTML = `<div class="center"><div class="login"><div class="logo">🔒</div><h1>Accesso non autorizzato</h1>
-      <p>L'account <b>${esc(S.user.email)}</b> non è nella lista. Chiedi all'amministratore di aggiungerlo.</p>
+    $app.innerHTML = `<div class="center"><div class="login"><div class="logo">⏳</div><h1>Richiesta inviata</h1>
+      <p>Ciao ${esc((S.user.displayName || "").split(" ")[0])}! L'amministratore deve confermare chi sei. Appena lo fa, l'app si apre da sola.</p>
+      <div class="sub" style="margin-bottom:16px">${esc(S.user.email)}</div>
       <button class="btn big" data-act="logout">Cambia account</button></div></div>`;
     return;
   }
@@ -551,7 +574,7 @@ function render() {
   const tabs = [...TABS, ...(isAdmin() ? [{ id: "admin", ico: "⚙️", label: "Admin" }] : [])];
   const missCount = Object.keys(S.missing).filter((id) => product(id) && !product(id).archived && canSee(product(id))).length;
   $app.querySelector("[data-tabs]").innerHTML = tabs.map((t) =>
-    `<button class="tab ${S.view === t.id ? "active" : ""}" data-tab="${t.id}"><span class="ico">${t.ico}</span>${t.label}${t.id === "manca" && missCount ? `<span class="badge">${missCount}</span>` : ""}</button>`).join("");
+    `<button class="tab ${S.view === t.id ? "active" : ""}" data-tab="${t.id}"><span class="ico">${t.ico}</span>${t.label}${t.id === "manca" && missCount ? `<span class="badge">${missCount}</span>` : ""}${t.id === "admin" && S.requests.length ? `<span class="badge">${S.requests.length}</span>` : ""}</button>`).join("");
   const focused = document.activeElement?.matches?.("[data-search]");
   main.innerHTML = { manca: viewManca, prodotti: viewProdotti, registro: viewRegistro, stats: viewStats, admin: viewAdmin }[S.view](stats);
   if (focused) { const s = main.querySelector("[data-search]"); s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
@@ -586,6 +609,10 @@ $app.addEventListener("click", async (e) => {
         return;
       }
       case "import": a.disabled = true; return importSeed();
+      case "approve": return approveRequest(a.dataset.email, id);
+      case "reject":
+        if (await confirmSheet("Rifiutare la richiesta?", `${a.dataset.email} non potrà entrare.`, "Rifiuta")) await deleteDoc(doc(db, "requests", a.dataset.email));
+        return;
       case "new-member": return openMemberEdit(null);
       case "edit-member": return openMemberEdit(id);
       case "new-person": return openPersonEdit(null);
@@ -617,6 +644,15 @@ if (configured) {
       } catch (e) { if (e.code !== "permission-denied") fail(e); }
       renderShell();
       if (S.me) startListeners();
+      else {
+        const em = u.email.toLowerCase();
+        setDoc(doc(db, "requests", em), { name: u.displayName || "", photo: u.photoURL || "", requestedAt: serverTimestamp() }, { merge: true }).catch(fail);
+        // resta in attesa: quando l'admin approva, entra automaticamente
+        S.unsub.push(onSnapshot(doc(db, "members", em), (d) => {
+          if (!d.exists()) return;
+          stopListeners(); S.me = { email: d.id, ...d.data() }; renderShell(); startListeners();
+        }, () => {}));
+      }
     } else renderShell();
   });
 }

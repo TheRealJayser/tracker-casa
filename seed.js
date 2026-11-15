@@ -2,9 +2,9 @@
 // Usati una sola volta dal pannello Admin → "Importa dati dal foglio".
 
 export const SEED_PEOPLE = [
-  { id: "fede", name: "Fede", color: "#7c5cff", order: 1 },
-  { id: "minkia", name: "Minkia", color: "#ff7a59", order: 2 },
-  { id: "berta", name: "Berta", color: "#1fb58f", order: 3 }
+  { id: "fede", name: "Fede", fullName: "Federica", color: "#7c5cff", order: 1 },
+  { id: "minkia", name: "Minkia", fullName: "Rosi", color: "#ff7a59", order: 2 },
+  { id: "berta", name: "Berta", fullName: "Beatrice", color: "#1fb58f", order: 3 }
 ];
 
 // [id, nome, emoji, categoria, partecipanti (vuoto = tutte)]

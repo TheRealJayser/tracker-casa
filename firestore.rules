@@ -27,6 +27,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Richieste di accesso: chi entra con Google e non è ancora autorizzato lascia qui la richiesta
+    match /requests/{email} {
+      allow read: if isAdmin() || (signedIn() && myEmail() == email);
+      allow create, update: if signedIn() && myEmail() == email;
+      allow delete: if isAdmin() || (signedIn() && myEmail() == email);
+    }
+
     match /people/{id} {
       allow read: if isMember();
       allow write: if isAdmin();

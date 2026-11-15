@@ -37,8 +37,9 @@ Da ora ogni modifica caricata su GitHub viene pubblicata da Netlify in automatic
 
 1. Apri il sito, **Accedi con Google** con l'account admin.
 2. Scheda **Admin → Importa dati dal foglio Google**: crea le 3 coinquiline, i 15 prodotti e i 42 acquisti del foglio (come "storico senza data").
-3. **Admin → Autorizza un account Google**: aggiungi la Gmail di Fede, Minkia e Berta e collegale al loro nome.
-   Se anche tu sei una delle coinquiline, tocca il tuo account e collegalo al tuo nome.
+3. Manda il link alle ragazze: entrano con **il loro account Google** e vedono "Richiesta inviata".
+4. Tu apri **Admin → 🔔 Richieste di accesso** e per ognuna tocchi chi è (Fede · Federica, Berta · Beatrice, Minkia · Rosi). L'app si apre da sola sul loro telefono, già filtrata sui loro prodotti.
+   (In alternativa puoi ancora autorizzare un'email in anticipo con *Autorizza un account Google*.)
 
 ## 4. Installarla su iPhone
 
