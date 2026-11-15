@@ -1,0 +1,21 @@
+# Crea una Release su GitHub per ogni versione di CHANGELOG.md che non ce l'ha ancora.
+name: Crea le Release
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Crea le Release mancanti dal CHANGELOG
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .github/scripts/releases.py
