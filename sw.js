@@ -1,6 +1,6 @@
 // Service worker: rende l'app installabile e usabile anche con rete scarsa.
 // Ad ogni release cambia CACHE (stesso numero di version.js).
-const CACHE = "tracker-casa-1.5.1";
+const CACHE = "tracker-casa-1.5.2";
 const SHELL = [
   "./", "index.html", "styles.css", "app.js", "version.js", "seed.js",
   "firebase-config.js", "manifest.webmanifest",

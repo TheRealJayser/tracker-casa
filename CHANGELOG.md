@@ -2,6 +2,10 @@
 
 Tutte le modifiche all'app sono registrate qui. Formato del titolo: `## [versione] — data — titolo`: a ogni push su `main` GitHub crea in automatico la Release corrispondente. Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioni [SemVer](https://semver.org/lang/it/).
 
+## [1.5.2] — 2026-11-16 — Barra in alto simmetrica
+### Modificato
+- **Barra in alto più bassa e simmetrica**: stesso spazio sopra e sotto il titolo, e titolo e avatar della stessa altezza, così sono perfettamente centrati come nelle app di iOS.
+
 ## [1.5.1] — 2026-11-15 — Release automatiche su GitHub
 ### Aggiunto
 - **Release su GitHub**: ogni versione di questo registro diventa una Release del repository, creata in automatico a ogni pubblicazione (`.github/workflows/release.yml` + `.github/scripts/releases.py`). Create anche tutte le Release passate.
