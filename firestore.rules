@@ -46,10 +46,11 @@ service cloud.firestore {
 
     match /purchases/{id} {
       allow read: if isMember();
-      allow create: if isMember()
+      // L'amministratore può anche ricreare acquisti di altre (ripristino da backup Excel)
+      allow create: if isAdmin() || (isMember()
         && request.resource.data.createdBy == myEmail()
         && request.resource.data.productId is string
-        && request.resource.data.personId is string;
+        && request.resource.data.personId is string);
       allow update, delete: if isAdmin()
         || (isMember() && resource.data.createdBy == myEmail());
     }

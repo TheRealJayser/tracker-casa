@@ -2,6 +2,19 @@
 
 Tutte le modifiche all'app sono registrate qui. Formato del titolo: `## [versione] — data — titolo`: a ogni push su `main` GitHub crea in automatico la Release corrispondente. Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/), versioni [SemVer](https://semver.org/lang/it/).
 
+## [1.6.0] — 2026-11-20 — Backup Excel e turni a pari merito
+### Aggiunto
+- **Backup Excel** (Admin → Backup): esporta in un file `.xlsx` coinquiline, prodotti, tutti gli acquisti, la lista "Manca", gli account e un riepilogo prodotto × coinquilina. Su iPhone si salva in File/iCloud dal pannello Condividi.
+- **Ripristina da Excel**: rilegge il backup con due modalità, *Unisci* (aggiunge/aggiorna senza doppioni grazie agli ID) e *Sostituisci tutto*. Gli account non vengono mai tolti.
+- **Elimina i doppioni** (Admin → Dati): compare quando lo storico del foglio risulta importato più di una volta e lo riporta ai 42 acquisti giusti.
+
+### Modificato
+- **Turno a pari merito**: in "Manca in casa" compaiono tutte le coinquiline che hanno comprato quel prodotto meno volte (es. "Turno: Minkia e Berta"), non solo una.
+- Regole Firestore: l'amministratore può ricreare acquisti registrati da altre (serve per il ripristino).
+
+### Corretto
+- **Import del foglio doppio**: lo storico ora ha ID fissi, quindi un doppio tocco o un secondo telefono non lo duplicano più; il pulsante di import compare solo dopo che i dati sono caricati.
+
 ## [1.5.2] — 2026-11-16 — Barra in alto simmetrica
 ### Modificato
 - **Barra in alto più bassa e simmetrica**: stesso spazio sopra e sotto il titolo, e titolo e avatar della stessa altezza, così sono perfettamente centrati come nelle app di iOS.

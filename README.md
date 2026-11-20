@@ -4,7 +4,7 @@
   <a href="https://tracker-casa-a0c47.web.app"><b>🌐 Apri l'app</b></a> ·
   <a href="CHANGELOG.md">📝 Novità</a> ·
   <a href="https://github.com/TheRealJayser/tracker-casa/releases">🏷️ Release</a> ·
-  <img alt="versione" src="https://img.shields.io/badge/versione-1.5.2-5B4BDB">
+  <img alt="versione" src="https://img.shields.io/badge/versione-1.6.0-5B4BDB">
   <img alt="iPhone" src="https://img.shields.io/badge/iPhone-PWA-1d1b22?logo=apple">
   <img alt="Firebase" src="https://img.shields.io/badge/Firebase-Spark%20(gratis)-FFCA28?logo=firebase&logoColor=black">
 </p>
@@ -23,6 +23,7 @@ App per tre coinquiline: lista di **cosa manca in casa**, **registro acquisti**,
 - 🧾 **Registro** — tutti gli acquisti giorno per giorno.
 - 📊 **Statistiche** — chi ha comprato di più, chi per ultimo, tabella prodotto × coinquilina.
 - 🔐 **Accesso controllato** — si entra con Google, l'amministratore conferma chi è chi.
+- 💾 **Backup Excel** — l'amministratore esporta tutti i dati in un file Excel e li può ripristinare da lì.
 
 **Stack (tutto gratuito):** HTML/CSS/JS senza build · Firebase Authentication + Cloud Firestore + **Firebase Hosting** (piano Spark, senza carta di credito) · codice su GitHub.
 
@@ -101,20 +102,30 @@ All'import, **Carta Igienica, Dentifricio e Sapone Mani** sono assegnati a **Fed
 
 | Scheda | Cosa fa |
 |---|---|
-| 📝 **Manca** | Lista condivisa di cosa è finito. Per ogni voce: a chi tocca (chi l'ha comprato meno), chi l'ha comprato per ultimo, chi l'ha segnato. "✓ Preso" registra l'acquisto e lo toglie dalla lista. |
+| 📝 **Manca** | Lista condivisa di cosa è finito. Per ogni voce: a chi tocca (chi l'ha comprato meno; a pari merito compaiono tutte), chi l'ha comprato per ultimo, chi l'ha segnato. "✓ Preso" registra l'acquisto e lo toglie dalla lista. |
 | 🧺 **Prodotti** | Tutti i prodotti per categoria: "Manca" lo mette in lista, "✓ Preso" registra un acquisto (chi, quando, nota). |
 | 🧾 **Registro** | Tutti gli acquisti per giorno, filtrabili per coinquilina. Ognuna può eliminare quelli che ha inserito lei; l'admin tutti. |
 | 📊 **Statistiche** | Totale, top coinquilina, top prodotto, ultimo acquisto, classifica e tabella prodotto × coinquilina (come nel foglio). |
-| ⚙️ **Admin** | Solo amministratore: account autorizzati, coinquiline, prodotti (aggiungi/modifica/archivia), import dal foglio. |
+| ⚙️ **Admin** | Solo amministratore: account autorizzati, coinquiline, prodotti (aggiungi/modifica/archivia), import dal foglio, backup e ripristino Excel. |
 
 ### Dati su Firestore
 - `members/{email}` → `role` (`admin`/`member`), `personId`
 - `people/{id}` → `name`, `color`, `order`
 - `products/{id}` → `name`, `emoji`, `category`, `order`, `archived`
-- `purchases/{auto}` → `productId`, `personId`, `date`, `note`, `createdBy`, `createdAt`, `historical`, `count` (solo storico)
+- `purchases/{auto}` (storico del foglio: `seed-persona-prodotto`) → `productId`, `personId`, `date`, `note`, `createdBy`, `createdAt`, `historical`, `count` (solo storico)
 - `missing/{productId}` → `addedBy`, `addedByEmail`, `addedAt`
 
 La sicurezza è nelle regole (`firestore.rules`, pubblicate con `firebase deploy`): chi non è in `members` non legge e non scrive nulla.
+
+### Backup Excel
+**Admin → Backup → Esporta backup Excel** crea `tracker-casa-backup_data.xlsx` (su iPhone si apre *Condividi* → *Salva in File*). Fogli:
+`Info`, `Coinquiline`, `Prodotti`, `Acquisti`, `Manca`, `Account` e `Riepilogo` (tabella prodotto × coinquilina, solo da leggere).
+
+**Admin → Backup → Ripristina da Excel** legge lo stesso file:
+- *Unisci* aggiunge/aggiorna usando le colonne **ID** → rifarlo due volte non crea doppioni;
+- *Sostituisci tutto* rende l'app uguale al file (cancella ciò che nel file non c'è). Gli account non vengono mai tolti.
+
+Le righe aggiunte a mano nel file vanno lasciate con l'**ID vuoto**. Il ripristino richiede le regole Firestore aggiornate alla 1.6.0.
 
 ## Limiti gratuiti (piano Spark)
 

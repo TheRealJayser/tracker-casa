@@ -299,3 +299,6 @@ select.field { -webkit-appearance: none; appearance: none;
 @media (prefers-reduced-motion: reduce) {
   .tab-pill, .tab svg, .view-enter, .sheet, .badge.bump { transition: none !important; animation: none !important; }
 }
+
+/* Pulsanti grandi uno sotto l'altro nelle card (Admin → Dati/Backup) */
+.card .btn.big + .btn.big { margin-top: 8px; }

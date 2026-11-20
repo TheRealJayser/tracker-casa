@@ -12,6 +12,7 @@ import {
 import { firebaseConfig } from "./firebase-config.js";
 import { VERSION } from "./version.js";
 import { SEED_PEOPLE, SEED_PRODUCTS, SEED_COUNTS } from "./seed.js";
+import { writeXlsx, readXlsx } from "./xlsx.js";
 
 // ---------------------------------------------------------------- Stato
 const S = {
@@ -19,6 +20,7 @@ const S = {
   people: [], products: [], purchases: [], missing: {}, members: [], requests: [],
   view: localStorage.getItem("view") || "manca",
   logFilter: "all", search: "",
+  loaded: {},                         // raccolte già arrivate dal database
   unsub: []
 };
 const $app = document.getElementById("app");
@@ -105,6 +107,15 @@ function suggestedTurn(stats, productId) {
     (a.order || 0) - (b2.order || 0)
   )[0];
 }
+// Tutte quelle a cui tocca: chi ha comprato meno volte quel prodotto (a pari merito, tutte).
+function turnPeople(stats, productId) {
+  const b = stats.byProduct[productId] || { per: {} };
+  const who = participants(product(productId));
+  if (!who.length) return [];
+  const min = Math.min(...who.map((p) => b.per[p.id] || 0));
+  return who.filter((p) => (b.per[p.id] || 0) === min);
+}
+const joinNames = (list) => list.length < 2 ? (list[0]?.name || "") : list.slice(0, -1).map((p) => p.name).join(", ") + " e " + list[list.length - 1].name;
 
 // ---------------------------------------------------------------- Firebase
 // Su Firebase Hosting la configurazione arriva da sola (/__/firebase/init.json): non serve incollarla.
@@ -142,7 +153,8 @@ function stopListeners() { S.unsub.forEach((u) => u()); S.unsub = []; }
 function startListeners() {
   stopListeners();
   const sortByOrder = (a, b) => (a.order ?? 999) - (b.order ?? 999) || a.name.localeCompare(b.name);
-  const listen = (name, fn) => S.unsub.push(onSnapshot(collection(db, name), fn, fail));
+  S.loaded = {};
+  const listen = (name, fn) => S.unsub.push(onSnapshot(collection(db, name), (snap) => { S.loaded[name] = true; fn(snap); }, fail));
   listen("people", (snap) => { S.people = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort(sortByOrder); render(); });
   listen("products", (snap) => { S.products = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort(sortByOrder); render(); });
   listen("purchases", (snap) => { S.purchases = snap.docs.map((d) => ({ id: d.id, ...d.data() })); render(); });
@@ -174,26 +186,299 @@ async function setMissing(productId, on) {
   if (on) await setDoc(doc(db, "missing", productId), { addedBy: myPersonId() || "", addedByEmail: S.user.email.toLowerCase(), addedAt: serverTimestamp() });
   else await deleteDoc(doc(db, "missing", productId));
 }
+// ID fissi per lo storico del foglio ("seed-persona-prodotto"): anche se l'import parte due volte
+// (doppio tocco, due telefoni, dati non ancora caricati) riscrive gli stessi documenti invece di duplicarli.
+const seedId = (personId, productId) => `seed-${personId}-${productId}`;
+let importing = false;
 async function importSeed() {
+  if (importing) return;
+  if (!S.loaded.purchases || !S.loaded.products) return toast("Attendi il caricamento dei dati…");
   if (S.purchases.some((p) => p.historical)) return toast("Dati del foglio già importati");
-  const batch = writeBatch(db);
-  SEED_PEOPLE.forEach((p) => { if (!person(p.id)) batch.set(doc(db, "people", p.id), { name: p.name, fullName: p.fullName, color: p.color, order: p.order }); });
-  SEED_PRODUCTS.forEach(([id, name, emoji, category, parts], i) => {
-    if (!product(id)) batch.set(doc(db, "products", id), { name, emoji, category, participants: parts || [], order: i + 1, archived: false });
-  });
-  let n = 0;
-  for (const [personId, counts] of Object.entries(SEED_COUNTS)) {
-    counts.forEach((c, i) => {
-      if (!c) return;
-      n += c;
-      batch.set(doc(collection(db, "purchases")), {
-        productId: SEED_PRODUCTS[i][0], personId, count: c, date: null, note: "Importato dal foglio",
-        createdBy: S.user.email.toLowerCase(), createdAt: serverTimestamp(), historical: true
-      });
+  importing = true;
+  try {
+    const batch = writeBatch(db);
+    SEED_PEOPLE.forEach((p) => { if (!person(p.id)) batch.set(doc(db, "people", p.id), { name: p.name, fullName: p.fullName, color: p.color, order: p.order }); });
+    SEED_PRODUCTS.forEach(([id, name, emoji, category, parts], i) => {
+      if (!product(id)) batch.set(doc(db, "products", id), { name, emoji, category, participants: parts || [], order: i + 1, archived: false });
     });
+    let n = 0;
+    for (const [personId, counts] of Object.entries(SEED_COUNTS)) {
+      counts.forEach((c, i) => {
+        if (!c) return;
+        n += c;
+        const productId = SEED_PRODUCTS[i][0];
+        batch.set(doc(db, "purchases", seedId(personId, productId)), {
+          productId, personId, count: c, date: null, note: "Importato dal foglio",
+          createdBy: S.user.email.toLowerCase(), createdAt: serverTimestamp(), historical: true
+        });
+      });
+    }
+    await batch.commit();
+    toast(`Importati ${n} acquisti dal foglio ✓`);
+  } finally { importing = false; }
+}
+
+// Doppioni dello storico: stessa coinquilina + stesso prodotto importati più volte.
+// Ne resta uno solo (quello con ID fisso, altrimenti il primo creato).
+function seedDuplicates() {
+  const groups = {};
+  for (const pu of S.purchases) if (pu.historical) (groups[pu.personId + "|" + pu.productId] ||= []).push(pu);
+  const extra = [];
+  for (const list of Object.values(groups)) {
+    if (list.length < 2) continue;
+    list.sort((a, b) => (b.id === seedId(b.personId, b.productId)) - (a.id === seedId(a.personId, a.productId)) ||
+      (toDate(a.createdAt)?.getTime() || 0) - (toDate(b.createdAt)?.getTime() || 0) || a.id.localeCompare(b.id));
+    extra.push(...list.slice(1));
   }
-  await batch.commit();
-  toast(`Importati ${n} acquisti dal foglio ✓`);
+  return extra;
+}
+async function removeSeedDuplicates() {
+  const extra = seedDuplicates();
+  if (!extra.length) return toast("Nessun doppione");
+  const n = extra.reduce((s, p) => s + weight(p), 0);
+  if (!(await confirmSheet("Eliminare i doppioni?", `Lo storico del foglio risulta importato due volte: tolgo ${extra.length} righe doppie (${n} acquisti contati in più). Gli acquisti registrati nell'app non vengono toccati.`, "Elimina doppioni"))) return;
+  await commitInChunks(extra.map((p) => (b) => b.delete(doc(db, "purchases", p.id))));
+  toast(`Doppioni eliminati: ${extra.length} ✓`);
+}
+
+// Scritture in blocchi (Firestore accetta al massimo 500 operazioni per batch)
+async function commitInChunks(ops, size = 400) {
+  for (let i = 0; i < ops.length; i += size) {
+    const batch = writeBatch(db);
+    ops.slice(i, i + size).forEach((op) => op(batch));
+    await batch.commit();
+  }
+}
+
+// ---------------------------------------------------------------- Backup Excel
+// Fogli e colonne del backup: il ripristino legge le colonne per nome, quindi l'ordine può cambiare.
+// Le colonne "ID" collegano le righe tra loro: non vanno modificate (righe nuove: ID vuoto).
+const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const yn = (b) => (b ? "SÌ" : "NO");
+const isYes = (v) => v === true || /^(s|si|sì|yes|y|true|1|x|vero)$/i.test(String(v ?? "").trim());
+const str = (v) => (v === null || v === undefined ? "" : v instanceof Date ? v.toISOString() : String(v).trim());
+const num = (v, d = 0) => { const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(",", ".")); return isFinite(n) ? n : d; };
+function cellDate(v) {
+  if (v instanceof Date && !isNaN(v)) return v;
+  const t = str(v); if (!t) return null;
+  let m = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})(?:[ T](\d{1,2}):(\d{2}))?/.exec(t);
+  if (m) return new Date(+m[3] < 100 ? 2000 + +m[3] : +m[3], m[2] - 1, +m[1], m[4] ? +m[4] : 12, m[5] ? +m[5] : 0);
+  m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
+  if (m) { const d = new Date(t); return isNaN(d) ? new Date(+m[1], m[2] - 1, +m[3], 12) : d; }
+  return null;
+}
+const stamp = () => { const d = new Date(), z = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}_${z(d.getHours())}-${z(d.getMinutes())}`; };
+
+function buildBackup() {
+  const pName = (id) => person(id)?.name || "";
+  const prName = (id) => product(id)?.name || "";
+  const memberOf = (pid) => S.members.find((m) => m.personId === pid)?.email || "";
+  const purchases = [...S.purchases].sort((a, b) =>
+    (toDate(a.date)?.getTime() ?? -Infinity) - (toDate(b.date)?.getTime() ?? -Infinity) ||
+    (toDate(a.createdAt)?.getTime() || 0) - (toDate(b.createdAt)?.getTime() || 0));
+  const totPer = {}, totProd = {}, cell = {};
+  for (const pu of S.purchases) {
+    const w = weight(pu);
+    totPer[pu.personId] = (totPer[pu.personId] || 0) + w;
+    totProd[pu.productId] = (totProd[pu.productId] || 0) + w;
+    cell[pu.productId + "|" + pu.personId] = (cell[pu.productId + "|" + pu.personId] || 0) + w;
+  }
+  const lastOf = (prId) => S.purchases.filter((p) => p.productId === prId && toDate(p.date)).sort((a, b) => toDate(b.date) - toDate(a.date))[0];
+  const total = Object.values(totPer).reduce((a, b) => a + b, 0);
+  const sheets = [
+    { name: "Info", widths: [26, 70], header: true, rows: [
+      ["Tracker Casa — backup", ""],
+      ["Versione app", VERSION],
+      ["Esportato il", new Date()],
+      ["Esportato da", S.user.email],
+      ["Coinquiline", S.people.length],
+      ["Prodotti", S.products.length],
+      ["Righe acquisto", S.purchases.length],
+      ["Acquisti contati", total],
+      ["Cose che mancano", Object.keys(S.missing).length],
+      ["Account", S.members.length],
+      ["", ""],
+      ["Come ripristinare", "App → Admin → Dati → Ripristina da Excel, poi scegli questo file."],
+      ["Colonne ID", "Collegano le righe tra i fogli: non modificarle. Per aggiungere una riga a mano lascia l'ID vuoto."],
+      ["Riepilogo", "Il foglio Riepilogo è solo da leggere: al ripristino viene ignorato."]
+    ] },
+    { name: "Coinquiline", widths: [14, 16, 18, 10, 8, 32], header: true, rows: [
+      ["ID", "Soprannome", "Nome vero", "Colore", "Ordine", "Account Google"],
+      ...S.people.map((p) => [p.id, p.name, p.fullName || "", p.color || "", p.order ?? "", memberOf(p.id)])
+    ] },
+    { name: "Prodotti", widths: [24, 7, 26, 12, 22, 24, 8, 11], header: true, rows: [
+      ["ID", "Emoji", "Nome", "Categoria", "Partecipanti ID", "Partecipanti", "Ordine", "Archiviato"],
+      ...S.products.map((p) => [p.id, p.emoji || "", p.name, p.category || "", (p.participants || []).join(", "),
+        p.participants?.length ? p.participants.map(pName).join(", ") : "Tutte", p.order ?? "", yn(p.archived)])
+    ] },
+    { name: "Acquisti", widths: [24, 12, 22, 22, 14, 14, 9, 9, 30, 30, 17], header: true, rows: [
+      ["ID", "Data", "Prodotto ID", "Prodotto", "Coinquilina ID", "Coinquilina", "Quantità", "Storico", "Nota", "Registrato da", "Registrato il"],
+      ...purchases.map((pu) => [pu.id, toDate(pu.date), pu.productId, prName(pu.productId), pu.personId, pName(pu.personId),
+        weight(pu), yn(pu.historical), pu.note || "", pu.createdBy || "", toDate(pu.createdAt)])
+    ] },
+    { name: "Manca", widths: [24, 22, 14, 14, 30, 17], header: true, rows: [
+      ["Prodotto ID", "Prodotto", "Segnato da ID", "Segnato da", "Email", "Segnato il"],
+      ...Object.entries(S.missing).map(([id, m]) => [id, prName(id), m.addedBy || "", pName(m.addedBy), m.addedByEmail || "", toDate(m.addedAt)])
+    ] },
+    { name: "Account", widths: [32, 12, 14, 14], header: true, rows: [
+      ["Email", "Ruolo", "Coinquilina ID", "Coinquilina"],
+      ...S.members.map((m) => [m.email, m.role === "admin" ? "admin" : "member", m.personId || "", pName(m.personId)])
+    ] },
+    { name: "Riepilogo", widths: [26, ...S.people.map(() => 11), 8, 14, 12], header: true, rows: [
+      ["Prodotto", ...S.people.map((p) => p.name), "Totale", "Ultimo", "Ultima data"],
+      ...[...S.products].sort((a, b) => (totProd[b.id] || 0) - (totProd[a.id] || 0)).map((pr) => {
+        const l = lastOf(pr.id);
+        return [`${pr.emoji || ""} ${pr.name}`.trim(), ...S.people.map((p) => cell[pr.id + "|" + p.id] || 0), totProd[pr.id] || 0, l ? pName(l.personId) : "", l ? toDate(l.date) : null];
+      }),
+      ["Totale", ...S.people.map((p) => totPer[p.id] || 0), total, "", null]
+    ] }
+  ];
+  return writeXlsx(sheets);
+}
+
+async function saveFile(bytes, name) {
+  const file = new File([bytes], name, { type: XLSX_TYPE });
+  // iPhone: il pannello Condividi permette "Salva in File", AirDrop, Mail…
+  if (isIOS && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); return true; }
+    catch (e) { if (e.name === "AbortError") return false; }
+  }
+  const url = URL.createObjectURL(file);
+  const a = document.createElement("a");
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  return true;
+}
+
+async function exportBackup() {
+  if (!S.loaded.purchases || !S.loaded.products || !S.loaded.people) return toast("Attendi il caricamento dei dati…");
+  const ok = await saveFile(buildBackup(), `tracker-casa-backup_${stamp()}.xlsx`);
+  if (ok) { localStorage.setItem("lastBackup", new Date().toISOString()); render(); toast("Backup Excel pronto ✓"); }
+}
+
+// Righe di un foglio → oggetti { "intestazione in minuscolo": valore }
+function sheetObjects(book, name) {
+  const key = Object.keys(book).find((k) => k.trim().toLowerCase() === name.toLowerCase());
+  if (!key) return null;
+  const [head = [], ...rows] = book[key];
+  const h = head.map((x) => str(x).toLowerCase());
+  return rows.filter((r) => r && r.some((v) => str(v) !== "")).map((r) => Object.fromEntries(h.map((k, i) => [k, r[i]])));
+}
+
+function parseBackup(book) {
+  const people = sheetObjects(book, "Coinquiline"), products = sheetObjects(book, "Prodotti"),
+    purchases = sheetObjects(book, "Acquisti"), missing = sheetObjects(book, "Manca"), members = sheetObjects(book, "Account");
+  if (!people && !products && !purchases) throw new Error("Nel file non trovo i fogli Coinquiline, Prodotti e Acquisti: è un backup di Tracker Casa?");
+  const warn = [];
+  const out = { people: null, products: null, purchases: null, missing: null, members: null, warn };
+  const takenP = new Set(), takenPr = new Set();
+  if (people) out.people = people.filter((r) => str(r["soprannome"]) || str(r["id"])).map((r, i) => {
+    let id = str(r["id"]) || slug(str(r["soprannome"]));
+    while (takenP.has(id) && !str(r["id"])) id += "-2";
+    takenP.add(id);
+    return { id, data: { name: str(r["soprannome"]) || id, fullName: str(r["nome vero"]), color: str(r["colore"]) || COLORS[i % COLORS.length], order: num(r["ordine"], i + 1) } };
+  });
+  const personIds = new Set([...(out.people || []).map((p) => p.id), ...(out.people ? [] : S.people.map((p) => p.id))]);
+  const personByName = (n) => (out.people || S.people.map((p) => ({ id: p.id, data: p }))).find((p) => p.data.name.toLowerCase() === n.toLowerCase())?.id;
+  if (products) out.products = products.filter((r) => str(r["nome"]) || str(r["id"])).map((r, i) => {
+    let id = str(r["id"]) || slug(str(r["nome"]));
+    while (takenPr.has(id) && !str(r["id"])) id += "-2";
+    takenPr.add(id);
+    const parts = str(r["partecipanti id"]).split(/[,;]/).map((x) => x.trim()).filter((x) => x && personIds.has(x));
+    return { id, data: { name: str(r["nome"]) || id, emoji: str(r["emoji"]) || "📦", category: str(r["categoria"]) || "Altro",
+      participants: parts.length >= personIds.size ? [] : parts, order: num(r["ordine"], i + 1), archived: isYes(r["archiviato"]) } };
+  });
+  const productIds = new Set([...(out.products || []).map((p) => p.id), ...(out.products ? [] : S.products.map((p) => p.id))]);
+  const productByName = (n) => (out.products || S.products.map((p) => ({ id: p.id, data: p }))).find((p) => p.data.name.toLowerCase() === n.toLowerCase())?.id;
+  const me = S.user.email.toLowerCase();
+  if (purchases) {
+    out.purchases = [];
+    let skipped = 0;
+    purchases.forEach((r) => {
+      const productId = str(r["prodotto id"]) || productByName(str(r["prodotto"])) || "";
+      const personId = str(r["coinquilina id"]) || personByName(str(r["coinquilina"])) || "";
+      if (!productIds.has(productId) || !personIds.has(personId)) { skipped++; return; }
+      const historical = isYes(r["storico"]);
+      const date = cellDate(r["data"]);
+      const q = Math.max(1, Math.round(num(r["quantità"] ?? r["quantita"], 1)));
+      const created = cellDate(r["registrato il"]);
+      const data = { productId, personId, date: date ? Timestamp.fromDate(date) : null, note: str(r["nota"]), historical,
+        createdBy: str(r["registrato da"]).toLowerCase() || me, createdAt: created ? Timestamp.fromDate(created) : serverTimestamp() };
+      if (q > 1 || historical) data.count = q;
+      out.purchases.push({ id: str(r["id"]) || doc(collection(db, "purchases")).id, data });
+    });
+    if (skipped) warn.push(`${skipped} righe di acquisto saltate (prodotto o coinquilina non trovati)`);
+  }
+  if (missing) out.missing = missing.filter((r) => productIds.has(str(r["prodotto id"]) || productByName(str(r["prodotto"])) || "")).map((r) => {
+    const added = cellDate(r["segnato il"]);
+    return { id: str(r["prodotto id"]) || productByName(str(r["prodotto"])),
+      data: { addedBy: personIds.has(str(r["segnato da id"])) ? str(r["segnato da id"]) : "", addedByEmail: str(r["email"]).toLowerCase() || me,
+        addedAt: added ? Timestamp.fromDate(added) : serverTimestamp() } };
+  });
+  if (members) out.members = members.filter((r) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(str(r["email"]))).map((r) => {
+    const email = str(r["email"]).toLowerCase();
+    const pid = str(r["coinquilina id"]);
+    return { id: email, data: { role: email === me ? "admin" : (str(r["ruolo"]).toLowerCase() === "admin" ? "admin" : "member"), personId: personIds.has(pid) ? pid : "" } };
+  });
+  return out;
+}
+
+async function restoreBackup(plan, replace) {
+  const ops = [];
+  const sets = { people: plan.people, products: plan.products, purchases: plan.purchases, missing: plan.missing };
+  for (const [col, list] of Object.entries(sets)) {
+    if (!list) continue; // foglio assente nel file: quella parte non si tocca
+    list.forEach((x) => ops.push((b) => b.set(doc(db, col, x.id), x.data)));
+    if (replace) {
+      const keep = new Set(list.map((x) => x.id));
+      const current = col === "missing" ? Object.keys(S.missing) : S[col].map((x) => x.id);
+      current.filter((id) => !keep.has(id)).forEach((id) => ops.push((b) => b.delete(doc(db, col, id))));
+    }
+  }
+  // Account: solo aggiunti/aggiornati, mai tolti (così nessuno resta chiuso fuori per errore)
+  (plan.members || []).forEach((x) => ops.push((b) => b.set(doc(db, "members", x.id), x.data, { merge: true })));
+  await commitInChunks(ops);
+}
+
+function pickBackupFile() {
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = ".xlsx," + XLSX_TYPE; inp.style.display = "none";
+  document.body.appendChild(inp);
+  inp.onchange = async () => {
+    const f = inp.files && inp.files[0]; inp.remove();
+    if (!f) return;
+    let plan;
+    try { plan = parseBackup(await readXlsx(await f.arrayBuffer())); } catch (e) { return toast(e.message || "File non valido"); }
+    const n = (l) => (l ? l.length : "—");
+    const w = (plan.purchases || []).reduce((s, x) => s + (x.data.count || 1), 0);
+    openSheet(`<h2>Ripristina da Excel</h2><div class="sub">${esc(f.name)}</div>
+      <div class="card" style="margin-top:12px">
+        <div class="log-item"><div class="grow">👭 Coinquiline</div><b>${n(plan.people)}</b></div>
+        <div class="log-item"><div class="grow">📦 Prodotti</div><b>${n(plan.products)}</b></div>
+        <div class="log-item"><div class="grow">🧾 Acquisti</div><b>${n(plan.purchases)}${plan.purchases ? ` <span class="muted">(${w} contati)</span>` : ""}</b></div>
+        <div class="log-item"><div class="grow">🛒 Mancano</div><b>${n(plan.missing)}</b></div>
+        <div class="log-item"><div class="grow">🔑 Account</div><b>${n(plan.members)}</b></div>
+      </div>
+      ${plan.warn.map((x) => `<div class="sub" style="color:var(--warn);margin:4px 2px">⚠️ ${esc(x)}</div>`).join("")}
+      <p class="muted" style="margin:10px 2px"><b>Unisci</b>: aggiunge e aggiorna usando gli ID del file, senza creare doppioni.<br>
+      <b>Sostituisci</b>: l'app diventa uguale al file (cancella quello che nel file non c'è). Gli account non vengono mai tolti.</p>
+      <button class="btn big primary" data-merge>⤵︎ Unisci</button>
+      <button class="btn big warn" data-replace>Sostituisci tutto</button>
+      <button class="btn big ghost" data-dismiss>Annulla</button>`, (el) => {
+      const run = async (replace, btn) => {
+        if (replace && !(await confirmSheet("Sostituire tutti i dati?", "Quello che c'è nell'app e non nel file verrà cancellato. Se non hai un backup recente, esportalo prima.", "Sostituisci"))) return;
+        btn.disabled = true;
+        try { await restoreBackup(plan, replace); closeSheet(); toast("Dati ripristinati ✓"); }
+        catch (e) {
+          btn.disabled = false;
+          if (e?.code === "permission-denied") toast("Permesso negato: aggiorna le regole Firestore (vedi README)"); else fail(e);
+        }
+      };
+      el.querySelector("[data-merge]").onclick = (e) => run(false, e.target);
+      el.querySelector("[data-replace]").onclick = (e) => run(true, e.target);
+    });
+  };
+  inp.click();
 }
 
 async function approveRequest(email, personId) {
@@ -482,13 +767,13 @@ function viewManca(stats) {
   if (!items.length) return `<div class="empty"><div class="hero">🎉</div><h3>Casa rifornita!</h3><p>Non manca niente. Se finisce qualcosa, segnalo qui.</p></div>${add}`;
   return `<div class="sub" style="margin:0 4px 10px">${items.length} ${items.length === 1 ? "cosa da comprare" : "cose da comprare"}</div>` +
     items.map(({ pr, m }) => {
-      const turn = suggestedTurn(stats, pr.id);
+      const turn = turnPeople(stats, pr.id);
       const last = stats.byProduct[pr.id]?.last;
       const who = person(m.addedBy);
       return `<div class="card"><div class="row">
         <div class="emoji">${esc(pr.emoji || "📦")}</div>
         <div class="grow"><div class="name">${esc(pr.name)}</div>
-          <div class="sub">${turn ? `<span class="tag turn">Turno: ${esc(turn.name)}</span> ` : ""}${last ? `ultimo: <b>${esc(person(last.personId)?.name)}</b> ${fmtDay(last.date)}` : ""}</div>
+          <div class="sub">${turn.length ? `<span class="tag turn">Turno: ${esc(joinNames(turn))}</span> ` : ""}${last ? `ultimo: <b>${esc(person(last.personId)?.name)}</b> ${fmtDay(last.date)}` : ""}</div>
           <div class="sub">segnato ${who ? `da ${esc(who.name)} ` : ""}${fmtDay(toDate(m.addedAt)) || "ora"}</div></div>
         <button class="btn ok" data-act="buy" data-id="${pr.id}">✓ Preso</button>
       </div></div>`;
@@ -496,6 +781,7 @@ function viewManca(stats) {
 }
 
 function emptyFirstRun() {
+  if (!S.loaded.products || !S.loaded.purchases) return `<div class="empty"><div class="hero">⏳</div><p>Caricamento…</p></div>`;
   return `<div class="empty"><div class="hero">🏡</div><h3>Benvenuti!</h3>
     <p>${isAdmin() ? "Importa i dati dal foglio Google per partire con prodotti, coinquiline e i 42 acquisti già segnati." : "L'amministratore deve ancora configurare i prodotti."}</p>
     ${isAdmin() ? `<button class="btn big primary" data-act="import">⤵︎ Importa dati dal foglio</button>` : ""}</div>`;
@@ -589,6 +875,8 @@ function viewStats(stats) {
 function viewAdmin() {
   if (!isAdmin()) return "";
   const hasHist = S.purchases.some((p) => p.historical);
+  const dups = seedDuplicates();
+  const lastBackup = (() => { const d = new Date(localStorage.getItem("lastBackup") || ""); return isNaN(d) ? null : d; })();
   const linked = new Set(S.members.map((m) => m.personId).filter(Boolean));
   const free = S.people.filter((p) => !linked.has(p.id));
   const reqs = S.requests.length ? `<div class="section-title">🔔 Richieste di accesso</div>` + S.requests.map((r) => `<div class="card">
@@ -615,7 +903,15 @@ function viewAdmin() {
     <button class="btn big" style="margin-top:8px" data-act="new-product">＋ Nuovo prodotto</button></div>
 
   <div class="section-title">Dati</div><div class="card">
-    <button class="btn big ${hasHist ? "ghost" : "primary"}" data-act="import" ${hasHist ? "disabled" : ""}>${hasHist ? "✓ Dati del foglio già importati" : "⤵︎ Importa dati dal foglio Google"}</button></div>
+    ${dups.length ? `<div class="sub" style="color:var(--warn);margin:2px 2px 8px">⚠️ Lo storico del foglio risulta importato più volte: ${dups.length} righe doppie (${dups.reduce((s, p) => s + weight(p), 0)} acquisti contati in più).</div>
+    <button class="btn big warn" data-act="fix-dups">🧹 Elimina i doppioni</button>` : ""}
+    <button class="btn big ${hasHist ? "ghost" : "primary"}" data-act="import" ${hasHist || !S.loaded.purchases ? "disabled" : ""}>${hasHist ? "✓ Dati del foglio già importati" : "⤵︎ Importa dati dal foglio Google"}</button></div>
+
+  <div class="section-title">Backup</div><div class="card">
+    <div class="sub" style="margin:2px 2px 10px">Un file Excel con tutto: coinquiline, prodotti, acquisti, lista "Manca", account e un riepilogo. Salvalo in File o iCloud: se serve, si ripristina da qui.</div>
+    <button class="btn big primary" data-act="export">⬇︎ Esporta backup Excel</button>
+    <button class="btn big" data-act="restore">⬆︎ Ripristina da Excel</button>
+    <div class="sub" style="margin:8px 2px 0">${lastBackup ? `Ultimo backup da questo dispositivo: ${fmtDay(lastBackup)}` : "Nessun backup esportato da questo dispositivo"}</div></div>
   <div class="footer-ver">Tracker Casa v${VERSION}</div>`;
 }
 
@@ -695,6 +991,9 @@ $app.addEventListener("click", async (e) => {
         return;
       }
       case "import": a.disabled = true; return importSeed();
+      case "fix-dups": return removeSeedDuplicates();
+      case "export": return exportBackup();
+      case "restore": return pickBackupFile();
       case "approve": return approveRequest(a.dataset.email, id);
       case "reject":
         if (await confirmSheet("Rifiutare la richiesta?", `${a.dataset.email} non potrà entrare.`, "Rifiuta")) await deleteDoc(doc(db, "requests", a.dataset.email));
